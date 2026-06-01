@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>サクラの異変を報告する｜クビアカツヤカミキリ対策室</title>
+
+<!-- ════════════════════════════════════════════════════════════
+     ★設定エリア★  ここだけ書き換えてください
+     GAS（Google Apps Script）のウェブアプリURLを貼り付けます。
+     空のままだと「デモモード」になり、送信は実行されません（画面確認用）。
+════════════════════════════════════════════════════════════ -->
+<script>
+  const GAS_URL = "https://script.google.com/macros/s/AKfycbzinuU7Um6F9nOv0eOigQ2jRB2D6ToalNbZ0G1SiY3ngHX4q3hu10FjLWBVz5vPTkq7-Q/exec"; // ← ここにGASのウェブアプリURLを貼る
+</script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --sakura:#f4a6b8; --sakura-deep:#e0738d; --sakura-soft:#fce4ea;
+    --bark:#6b4f3a; --leaf:#7a9b76; --leaf-deep:#5d7d59;
+    --bg:#fdf7f4; --ink:#3a2e28; --ink-soft:#7a6a60;
+    --card:#ffffff; --danger:#c0563f; --line:#ece0d8;
+    --radius:18px; --shadow:0 6px 22px rgba(107,79,58,.10);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+  body{font-family:'Zen Kaku Gothic New',sans-serif;color:var(--ink);background:var(--bg);
+    line-height:1.75;font-size:16.5px;overflow-x:hidden;}
+  .petals{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden;}
+  .petal{position:absolute;width:14px;height:14px;background:var(--sakura);opacity:.18;
+    border-radius:14px 1px 14px 1px;animation:fall linear infinite;}
+  @keyframes fall{0%{transform:translateY(-10vh) rotate(0);}100%{transform:translateY(110vh) rotate(360deg);}}
+  .wrap{position:relative;z-index:1;max-width:520px;margin:0 auto;padding:0 16px 60px;}
+  header{text-align:center;padding:34px 14px 22px;}
+  .badge{display:inline-block;font-size:12.5px;letter-spacing:.12em;color:var(--sakura-deep);
+    background:var(--sakura-soft);padding:5px 14px;border-radius:999px;font-weight:700;margin-bottom:14px;}
+  h1{font-family:'Zen Maru Gothic',sans-serif;font-size:25px;font-weight:700;line-height:1.5;
+    color:var(--bark);letter-spacing:.01em;}
+  h1 .em{color:var(--sakura-deep);}
+  .lead{margin-top:12px;font-size:15px;color:var(--ink-soft);}
+  .card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);
+    padding:22px 18px;margin-bottom:18px;border:1px solid var(--line);
+    opacity:0;transform:translateY(16px);animation:rise .6s ease forwards;}
+  .card:nth-of-type(1){animation-delay:.05s;}
+  .card:nth-of-type(2){animation-delay:.12s;}
+  .card:nth-of-type(3){animation-delay:.19s;}
+  .card:nth-of-type(4){animation-delay:.26s;}
+  .card:nth-of-type(5){animation-delay:.33s;}
+  @keyframes rise{to{opacity:1;transform:none;}}
+  .step-head{display:flex;align-items:center;gap:11px;margin-bottom:6px;}
+  .step-no{flex:none;width:30px;height:30px;border-radius:50%;background:var(--bark);color:#fff;
+    font-family:'Zen Maru Gothic',sans-serif;font-weight:700;font-size:15px;display:grid;place-items:center;}
+  .step-title{font-family:'Zen Maru Gothic',sans-serif;font-weight:700;font-size:18px;color:var(--bark);}
+  .req{font-size:11.5px;font-weight:700;color:#fff;background:var(--danger);padding:2px 9px;border-radius:999px;margin-left:auto;}
+  .opt{font-size:11.5px;font-weight:700;color:var(--leaf-deep);background:#eaf1e8;padding:2px 9px;border-radius:999px;margin-left:auto;}
+  .step-desc{font-size:14px;color:var(--ink-soft);margin:2px 0 16px;padding-left:41px;}
+  .sample{display:flex;gap:12px;align-items:center;background:var(--sakura-soft);
+    border-radius:14px;padding:11px 13px;margin-bottom:14px;}
+  .sample-img{flex:none;width:62px;height:62px;border-radius:11px;background:#fff;border:1px dashed var(--sakura);
+    display:grid;place-items:center;font-size:11px;color:var(--sakura-deep);text-align:center;line-height:1.3;overflow:hidden;}
+  .sample-img img{width:100%;height:100%;object-fit:cover;}
+  .sample-txt{font-size:13px;color:var(--bark);}
+  .sample-txt b{color:var(--sakura-deep);}
+  .shot{display:block;width:100%;border:2px dashed var(--sakura);background:#fff8fa;color:var(--sakura-deep);
+    border-radius:14px;padding:20px;font-family:'Zen Maru Gothic',sans-serif;font-weight:700;font-size:16px;
+    cursor:pointer;transition:.2s;text-align:center;}
+  .shot:active{transform:scale(.98);background:var(--sakura-soft);}
+  .shot .ico{font-size:30px;display:block;margin-bottom:4px;}
+  input[type=file]{display:none;}
+  .preview{margin-top:12px;position:relative;display:none;}
+  .preview.show{display:block;}
+  .preview img{width:100%;border-radius:14px;display:block;}
+  .preview .redo{position:absolute;top:9px;right:9px;background:rgba(58,46,40,.82);color:#fff;
+    border:none;border-radius:999px;padding:7px 15px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;}
+  .check-done{display:none;align-items:center;gap:7px;color:var(--leaf-deep);font-weight:700;font-size:14px;margin-top:10px;}
+  .check-done.show{display:flex;}
+  .geo-btn{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;
+    border:none;background:var(--leaf);color:#fff;border-radius:14px;padding:17px;
+    font-family:'Zen Maru Gothic',sans-serif;font-weight:700;font-size:16px;cursor:pointer;transition:.2s;}
+  .geo-btn:active{transform:scale(.98);}
+  .geo-status{margin-top:12px;font-size:14px;padding:12px 14px;border-radius:12px;display:none;}
+  .geo-status.ok{display:block;background:#eaf1e8;color:var(--leaf-deep);}
+  .geo-status.ng{display:block;background:#fbe9e4;color:var(--danger);}
+  .geo-status.loading{display:block;background:#f3ece6;color:var(--ink-soft);}
+  .q{margin-bottom:18px;} .q:last-child{margin-bottom:0;}
+  .q-label{font-weight:700;font-size:15px;margin-bottom:9px;display:block;}
+  .opts{display:flex;flex-wrap:wrap;gap:8px;}
+  .opts label{flex:1;min-width:72px;}
+  .opts input{display:none;}
+  .opts span{display:block;text-align:center;border:1.5px solid var(--line);border-radius:11px;
+    padding:11px 6px;font-size:14.5px;cursor:pointer;transition:.18s;background:#fff;color:var(--ink-soft);}
+  .opts input:checked+span{background:var(--bark);color:#fff;border-color:var(--bark);font-weight:700;}
+  textarea,input[type=text]{width:100%;border:1.5px solid var(--line);border-radius:12px;
+    padding:13px;font-family:inherit;font-size:15.5px;color:var(--ink);background:#fff;resize:vertical;}
+  textarea:focus,input[type=text]:focus{outline:none;border-color:var(--sakura);}
+  .field-note{font-size:12.5px;color:var(--ink-soft);margin:6px 0 0;}
+  label.fl{display:block;font-weight:700;font-size:14.5px;margin:14px 0 8px;}
+  label.fl:first-child{margin-top:0;}
+  .submit{display:block;width:100%;border:none;border-radius:16px;padding:20px;
+    background:linear-gradient(135deg,var(--sakura-deep),#d05f7c);color:#fff;
+    font-family:'Zen Maru Gothic',sans-serif;font-weight:700;font-size:18px;cursor:pointer;
+    box-shadow:0 8px 20px rgba(224,115,141,.32);transition:.2s;margin-top:6px;}
+  .submit:active{transform:scale(.99);}
+  .submit:disabled{opacity:.55;cursor:default;box-shadow:none;}
+  .note-foot{text-align:center;font-size:12.5px;color:var(--ink-soft);margin-top:18px;line-height:1.7;}
+  .done{position:fixed;inset:0;z-index:50;background:var(--bg);display:none;
+    flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:30px;}
+  .done.show{display:flex;animation:fade .5s ease;}
+  @keyframes fade{from{opacity:0;}to{opacity:1;}}
+  .done .mark{width:96px;height:96px;border-radius:50%;background:var(--leaf);display:grid;place-items:center;
+    margin-bottom:22px;animation:pop .55s cubic-bezier(.2,1.3,.5,1);}
+  @keyframes pop{0%{transform:scale(0);}100%{transform:scale(1);}}
+  .done .mark svg{width:48px;height:48px;}
+  .done h2{font-family:'Zen Maru Gothic',sans-serif;font-size:24px;color:var(--bark);margin-bottom:14px;}
+  .done p{color:var(--ink-soft);font-size:15.5px;max-width:340px;}
+  .done .again{margin-top:28px;border:1.5px solid var(--sakura);background:#fff;color:var(--sakura-deep);
+    border-radius:12px;padding:13px 26px;font-family:'Zen Maru Gothic',sans-serif;font-weight:700;font-size:15px;cursor:pointer;}
+  .sending{position:fixed;inset:0;z-index:60;background:rgba(253,247,244,.92);display:none;
+    flex-direction:column;align-items:center;justify-content:center;}
+  .sending.show{display:flex;}
+  .spin{width:54px;height:54px;border:5px solid var(--sakura-soft);border-top-color:var(--sakura-deep);
+    border-radius:50%;animation:spin 1s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .sending p{margin-top:18px;color:var(--bark);font-weight:700;font-family:'Zen Maru Gothic',sans-serif;}
+  .demo-tag{position:sticky;top:0;z-index:40;background:var(--bark);color:#fff;
+    text-align:center;font-size:12.5px;padding:6px;display:none;}
+  .demo-tag.show{display:block;}
+  .alt-link{display:block;width:100%;background:none;border:none;color:var(--bark);
+    font-family:inherit;font-size:14px;font-weight:700;text-decoration:underline;
+    cursor:pointer;margin-top:14px;padding:6px;}
+  .alt-box{display:none;margin-top:14px;padding-top:16px;border-top:1px dashed var(--line);}
+  .alt-box.show{display:block;}
+  .mini-map{height:0;border-radius:14px;margin-top:12px;overflow:hidden;transition:height .3s;}
+  .mini-map.show{height:220px;}
+</style>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+<body>
+
+<div class="petals" id="petals"></div>
+<div class="demo-tag" id="demoTag">デモモード（送信されません）｜公開時はGAS_URLを設定してください</div>
+
+<div class="wrap">
+  <header>
+    <span class="badge">クビアカツヤカミキリ対策室</span>
+    <h1>サクラの<span class="em">異変</span>を<br>見つけたら教えてください</h1>
+    <p class="lead">写真を撮って送るだけ。むずかしい判断は不要です。<br>あとは私たち樹木医が確認します。</p>
+  </header>
+
+  <div class="card">
+    <div class="step-head"><span class="step-no">1</span><span class="step-title">木の全体を撮る</span><span class="req">必須</span></div>
+    <p class="step-desc">どの木か分かるように、少し離れて全体を撮ってください。</p>
+    <div class="sample">
+      <div class="sample-img"><!-- お手本画像：<img src="お手本_全景.jpg"> -->全景の<br>お手本</div>
+      <div class="sample-txt">木の<b>幹から枝先まで</b>入るように。周りの様子も写ると場所が分かりやすいです。</div>
+    </div>
+    <label class="shot" for="photo1"><span class="ico">📷</span>木の全体を撮影／選ぶ</label>
+    <input type="file" id="photo1" accept="image/*" capture="environment">
+    <div class="preview" id="prev1"><img alt=""><button class="redo" data-redo="photo1">撮り直す</button></div>
+    <div class="check-done" id="done1">✓ 全景の写真を登録しました</div>
+  </div>
+
+  <div class="card">
+    <div class="step-head"><span class="step-no">2</span><span class="step-title">被害部を近くで撮る</span><span class="req">必須</span></div>
+    <p class="step-desc">幹の根元の「木くず」や、幹の「穴」など、気になる部分を近づいて撮ってください。</p>
+    <div class="sample">
+      <div class="sample-img"><!-- お手本画像：<img src="お手本_フラス.jpg"> -->フラスの<br>お手本</div>
+      <div class="sample-txt">根元に<b>かりんとう状の木くず（フラス）</b>があれば、それを大きく写してください。これが一番の手がかりです。</div>
+    </div>
+    <label class="shot" for="photo2"><span class="ico">🔍</span>被害部を撮影／選ぶ</label>
+    <input type="file" id="photo2" accept="image/*" capture="environment">
+    <div class="preview" id="prev2"><img alt=""><button class="redo" data-redo="photo2">撮り直す</button></div>
+    <div class="check-done" id="done2">✓ 被害部の写真を登録しました</div>
+  </div>
+
+  <div class="card">
+    <div class="step-head"><span class="step-no">3</span><span class="step-title">場所を教える</span><span class="req">必須</span></div>
+    <p class="step-desc">木のそばで下のボタンを押すと、今いる場所が自動で記録されます。</p>
+    <button class="geo-btn" id="geoBtn">📍 現在地を取得する</button>
+    <div class="geo-status" id="geoStatus"></div>
+
+    <button type="button" class="alt-link" id="altToggle">うまくいかない場合は、場所を入力する ▾</button>
+
+    <div class="alt-box" id="altBox">
+      <label class="fl" style="margin-top:0;">公園の名前や住所</label>
+      <input type="text" id="placeText" placeholder="例：川崎市宮前区 ○○公園 ／ ○○市○○町1-2">
+      <button type="button" class="geo-btn" id="lookupBtn" style="margin-top:10px;background:var(--bark);">🔎 この場所を地図で探す</button>
+      <div class="geo-status" id="lookupStatus"></div>
+      <div id="miniMap" class="mini-map"></div>
+      <p class="field-note" id="mapHint" style="display:none;">ピンを長押し→ドラッグで微調整できます。だいたいの位置で大丈夫です。</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="step-head"><span class="step-no">4</span><span class="step-title">気づいたこと</span><span class="opt">任意</span></div>
+    <p class="step-desc">分かる範囲でかまいません。「わからない」でも大丈夫です。</p>
+    <div class="q"><span class="q-label">根元や幹に、お手本のような木くず（フラス）がありましたか？</span>
+      <div class="opts">
+        <label><input type="radio" name="frass" value="はい"><span>はい</span></label>
+        <label><input type="radio" name="frass" value="いいえ"><span>いいえ</span></label>
+        <label><input type="radio" name="frass" value="わからない"><span>わからない</span></label>
+      </div></div>
+    <div class="q"><span class="q-label">幹に直径1cmくらいの丸い穴がありましたか？</span>
+      <div class="opts">
+        <label><input type="radio" name="hole" value="はい"><span>はい</span></label>
+        <label><input type="radio" name="hole" value="いいえ"><span>いいえ</span></label>
+        <label><input type="radio" name="hole" value="わからない"><span>わからない</span></label>
+      </div></div>
+    <div class="q"><span class="q-label">黒くて首が赤い虫を見ましたか？（成虫は6〜8月頃）</span>
+      <div class="opts">
+        <label><input type="radio" name="adult" value="はい"><span>はい</span></label>
+        <label><input type="radio" name="adult" value="いいえ"><span>いいえ</span></label>
+      </div></div>
+    <div class="q"><span class="q-label">木の種類は分かりますか？</span>
+      <div class="opts">
+        <label><input type="radio" name="tree" value="サクラ"><span>サクラ</span></label>
+        <label><input type="radio" name="tree" value="ウメ"><span>ウメ</span></label>
+        <label><input type="radio" name="tree" value="モモ"><span>モモ</span></label>
+        <label><input type="radio" name="tree" value="わからない"><span>わからない</span></label>
+      </div></div>
+  </div>
+
+  <div class="card">
+    <div class="step-head"><span class="step-no">5</span><span class="step-title">補足（自由）</span><span class="opt">任意</span></div>
+    <label class="fl">気づいたこと・本数など</label>
+    <textarea id="note" rows="3" placeholder="例：公園の入口付近に2本、木くずが多い"></textarea>
+    <label class="fl">追加の写真があれば</label>
+    <label class="shot" for="photoExtra" style="padding:14px;font-size:14px;"><span class="ico" style="font-size:22px;">➕</span>写真を追加する</label>
+    <input type="file" id="photoExtra" accept="image/*" multiple>
+    <div id="extraList" style="margin-top:10px;"></div>
+    <label class="fl">連絡先（折り返しが必要な方のみ）</label>
+    <input type="text" id="contact" placeholder="メールまたは電話番号（任意）">
+    <p class="field-note">連絡先は対策室だけが確認します。外部には公開されません。</p>
+  </div>
+
+  <button class="submit" id="submitBtn">この内容で報告する</button>
+  <p class="note-foot">写真は確認のためだけに使われます。<br>ご協力ありがとうございます。</p>
+</div>
+
+<div class="sending" id="sending"><div class="spin"></div><p>送信しています…</p></div>
+
+<div class="done" id="done">
+  <div class="mark"><svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+  <h2>報告ありがとうございました</h2>
+  <p>対策室の樹木医が内容を確認します。あなたの一報が、サクラを守る大きな力になります。</p>
+  <button class="again" id="againBtn">続けて別の木を報告する</button>
+</div>
+
+<script>
+(function(){
+  const box=document.getElementById('petals');
+  for(let i=0;i<9;i++){
+    const p=document.createElement('div');p.className='petal';
+    p.style.left=Math.random()*100+'vw';
+    p.style.animationDuration=(8+Math.random()*7)+'s';
+    p.style.animationDelay=(-Math.random()*10)+'s';
+    p.style.opacity=(.08+Math.random()*.12);
+    box.appendChild(p);
+  }
+})();
+
+if(!GAS_URL){document.getElementById('demoTag').classList.add('show');}
+
+function compress(file){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=e=>{
+      const img=new Image();
+      img.onload=()=>{
+        const max=1280;let w=img.width,h=img.height;
+        if(w>h&&w>max){h=h*max/w;w=max;}else if(h>max){w=w*max/h;h=max;}
+        const cv=document.createElement('canvas');cv.width=w;cv.height=h;
+        cv.getContext('2d').drawImage(img,0,0,w,h);
+        resolve(cv.toDataURL('image/jpeg',0.8));
+      };
+      img.onerror=reject;img.src=e.target.result;
+    };
+    reader.onerror=reject;reader.readAsDataURL(file);
+  });
+}
+
+const photos={photo1:null,photo2:null};
+['photo1','photo2'].forEach(function(id){
+  const input=document.getElementById(id);
+  const n=id.slice(-1);
+  const prev=document.getElementById('prev'+n);
+  const done=document.getElementById('done'+n);
+  input.addEventListener('change',async function(e){
+    const f=e.target.files[0];if(!f)return;
+    try{
+      const data=await compress(f);
+      photos[id]=data;
+      prev.querySelector('img').src=data;
+      prev.classList.add('show');done.classList.add('show');
+    }catch(err){alert('写真の読み込みに失敗しました。もう一度お試しください。');}
+  });
+});
+document.querySelectorAll('.redo').forEach(function(b){
+  b.addEventListener('click',function(){
+    const id=b.dataset.redo;document.getElementById(id).value='';photos[id]=null;
+    const n=id.slice(-1);
+    document.getElementById('prev'+n).classList.remove('show');
+    document.getElementById('done'+n).classList.remove('show');
+  });
+});
+
+const extras=[];
+document.getElementById('photoExtra').addEventListener('change',async function(e){
+  for(const f of e.target.files){
+    try{
+      const data=await compress(f);extras.push(data);
+      const wrap=document.createElement('div');
+      wrap.style.cssText='margin-bottom:8px;border-radius:10px;overflow:hidden;';
+      const im=document.createElement('img');im.src=data;im.style.cssText='width:100%;display:block;';
+      wrap.appendChild(im);document.getElementById('extraList').appendChild(wrap);
+    }catch(err){}
+  }
+  e.target.value='';
+});
+
+let geo={lat:null,lng:null,acc:null,method:null,placeText:''};
+const geoStatus=document.getElementById('geoStatus');
+let miniMap=null,marker=null;
+
+function setMethodGPS(){geo.method='GPS';}
+function showMiniMap(lat,lng){
+  document.getElementById('miniMap').classList.add('show');
+  document.getElementById('mapHint').style.display='block';
+  if(!miniMap){
+    miniMap=L.map('miniMap').setView([lat,lng],16);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      {attribution:'© OpenStreetMap',maxZoom:19}).addTo(miniMap);
+    marker=L.marker([lat,lng],{draggable:true}).addTo(miniMap);
+    marker.on('dragend',function(){
+      const p=marker.getLatLng();geo.lat=p.lat;geo.lng=p.lng;
+    });
+  }else{
+    miniMap.setView([lat,lng],16);marker.setLatLng([lat,lng]);
+  }
+  setTimeout(function(){miniMap.invalidateSize();},350);
+}
+
+document.getElementById('geoBtn').addEventListener('click',function(){
+  if(!navigator.geolocation){
+    geoStatus.className='geo-status ng';
+    geoStatus.innerHTML='この端末では位置情報が使えません。下の「場所を入力する」をお使いください。';
+    document.getElementById('altBox').classList.add('show');return;
+  }
+  geoStatus.className='geo-status loading';geoStatus.textContent='現在地を確認しています…';
+  navigator.geolocation.getCurrentPosition(
+    function(pos){
+      geo.lat=pos.coords.latitude;geo.lng=pos.coords.longitude;
+      geo.acc=Math.round(pos.coords.accuracy);setMethodGPS();
+      geoStatus.className='geo-status ok';
+      geoStatus.innerHTML='✓ 現在地を記録しました（誤差 約'+geo.acc+'m）';
+    },
+    function(err){
+      geoStatus.className='geo-status ng';
+      geoStatus.innerHTML='位置を取得できませんでした。<br>かわりに、下の欄に場所を入力してください。';
+      document.getElementById('altBox').classList.add('show');
+    },
+    {enableHighAccuracy:true,timeout:12000,maximumAge:0}
+  );
+});
+
+/* 場所入力の開閉 */
+document.getElementById('altToggle').addEventListener('click',function(){
+  document.getElementById('altBox').classList.toggle('show');
+});
+
+/* 国土地理院ジオコーディング（無料・キー不要） */
+const lookupStatus=document.getElementById('lookupStatus');
+document.getElementById('lookupBtn').addEventListener('click',async function(){
+  const q=document.getElementById('placeText').value.trim();
+  geo.placeText=q;
+  if(!q){lookupStatus.className='geo-status ng';lookupStatus.textContent='公園名や住所を入力してください。';return;}
+  lookupStatus.className='geo-status loading';lookupStatus.textContent='地図で場所を探しています…';
+  try{
+    const res=await fetch('https://msearch.gsi.go.jp/address-search/AddressSearch?q='+encodeURIComponent(q));
+    const data=await res.json();
+    if(data&&data.length>0){
+      const c=data[0].geometry.coordinates; // [経度,緯度]
+      geo.lng=c[0];geo.lat=c[1];geo.acc=null;geo.method='地名変換';
+      lookupStatus.className='geo-status ok';
+      lookupStatus.innerHTML='✓ 候補地点を表示しました。地図でピンの位置を確認・調整してください。';
+      showMiniMap(geo.lat,geo.lng);
+    }else{
+      geo.lat=null;geo.lng=null;geo.method='手入力のみ';
+      lookupStatus.className='geo-status ng';
+      lookupStatus.innerHTML='地図上で見つかりませんでした。入力いただいた場所の文字はそのまま記録し、対策室で確認します。このまま送信できます。';
+    }
+  }catch(err){
+    geo.lat=null;geo.lng=null;geo.method='手入力のみ';
+    lookupStatus.className='geo-status ng';
+    lookupStatus.innerHTML='検索に失敗しました。入力いただいた場所の文字は記録されます。このまま送信できます。';
+  }
+});
+
+function radioVal(name){const el=document.querySelector('input[name="'+name+'"]:checked');return el?el.value:'';}
+
+document.getElementById('submitBtn').addEventListener('click',async function(){
+  if(!photos.photo1){alert('ステップ1「木の全体」の写真が必要です。');return;}
+  if(!photos.photo2){alert('ステップ2「被害部」の写真が必要です。');return;}
+  // 場所：GPS/地名変換の座標、または場所の文字、のいずれかがあればOK
+  const placeNow=document.getElementById('placeText').value.trim();
+  if(geo.lat===null && !placeNow){
+    alert('ステップ3「場所」を教えてください。\n「現在地を取得する」か、場所の入力（公園名・住所）のどちらかをお願いします。');
+    document.getElementById('altBox').classList.add('show');return;
+  }
+  if(geo.lat===null && placeNow && !geo.method){geo.method='手入力のみ';geo.placeText=placeNow;}
+  if(placeNow){geo.placeText=placeNow;}
+
+  const payload={
+    type:'report',
+    photos:[photos.photo1,photos.photo2].concat(extras),
+    lat:geo.lat,lng:geo.lng,acc:geo.acc,
+    locMethod:geo.method||'',placeText:geo.placeText||'',
+    frass:radioVal('frass'),hole:radioVal('hole'),
+    adult:radioVal('adult'),tree:radioVal('tree'),
+    note:document.getElementById('note').value.trim(),
+    contact:document.getElementById('contact').value.trim()
+  };
+
+  document.getElementById('sending').classList.add('show');
+
+  if(!GAS_URL){
+    setTimeout(function(){document.getElementById('sending').classList.remove('show');
+      document.getElementById('done').classList.add('show');},900);
+    return;
+  }
+
+  try{
+    await fetch(GAS_URL,{method:'POST',body:JSON.stringify(payload)});
+    document.getElementById('sending').classList.remove('show');
+    document.getElementById('done').classList.add('show');
+  }catch(err){
+    document.getElementById('sending').classList.remove('show');
+    alert('送信に失敗しました。電波の良い場所でもう一度お試しください。');
+  }
+});
+
+document.getElementById('againBtn').addEventListener('click',function(){location.reload();});
+</script>
+</body>
+</html>
