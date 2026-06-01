@@ -51,6 +51,8 @@
     border-top:1px solid var(--line);font-size:12.5px;}
   .legend span{display:flex;align-items:center;gap:5px;}
   .dot{width:13px;height:13px;border-radius:50%;display:inline-block;}
+  .ring{width:14px;height:14px;border-radius:50%;border:2px dashed var(--c-mikakunin);
+    background:rgba(217,72,59,.15);box-sizing:border-box;display:inline-block;}
 
   .list-view{display:none;padding:14px;}
   .list-view.on{display:block;}
@@ -98,6 +100,7 @@
     <span><i class="dot" style="background:var(--c-youtaiou)"></i>要対応</span>
     <span><i class="dot" style="background:var(--c-shiro)"></i>該当なし</span>
     <span><i class="dot" style="background:var(--c-kanryo)"></i>対応済</span>
+    <span><i class="ring"></i>要注意区域（半径3km）</span>
   </div>
 </div>
 
@@ -114,6 +117,10 @@ const STATUS_COLOR = {
 const STATUS_LABEL = {
   '未確認':'未確認','確認予定':'確認予定','要対応':'要対応','シロ':'該当なし','完了':'対応済'
 };
+// 要注意区域の設定（管理ページと統一）──────────────
+const CAUTION_RADIUS_M = 3000;             // 半径（メートル）＝3km
+const CONFIRMED_STATUS = ['要対応','完了']; // 「発生確認」とみなす状態。ここを編集すれば対象を変更できる
+// ───────────────────────────────────────────
 let REPORTS = [];
 let map = null, markers = [];
 
@@ -141,6 +148,8 @@ function initMap(){
     map = L.map('map').setView([35.52, 139.55], 11);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
       {attribution:'© OpenStreetMap', maxZoom:19}).addTo(map);
+    // 縮尺バー（ズームに連動してkm/mが切り替わる・メートル法のみ）
+    L.control.scale({position:'bottomleft', metric:true, imperial:false, maxWidth:120}).addTo(map);
     setTimeout(function(){ if(map) map.invalidateSize(); }, 200);
   }catch(err){
     map = null; msg.style.display='flex';
@@ -151,7 +160,22 @@ function drawMarkers(){
   if(!map) return;
   markers.forEach(function(m){ map.removeLayer(m); });
   markers = [];
-  const pts = [];
+  let bounds = null;
+  function extend(b){ if(!bounds){ bounds = L.latLngBounds(b); } else { bounds.extend(b); } }
+
+  // 要注意区域：発生確認地点（CONFIRMED_STATUS）から半径3km
+  REPORTS.forEach(function(rep){
+    if(!rep.lat || !rep.lng) return;
+    if(CONFIRMED_STATUS.indexOf(rep.status) < 0) return;
+    const zone = L.circle([rep.lat, rep.lng], {
+      radius: CAUTION_RADIUS_M, color:'#d9483b', weight:2.5, dashArray:'6 5',
+      fillColor:'#d9483b', fillOpacity:.15, interactive:false
+    }).addTo(map);
+    markers.push(zone);
+    extend(zone.getBounds());
+  });
+
+  // 報告ピン（要注意区域の上に描画）
   REPORTS.forEach(function(rep){
     if(!rep.lat || !rep.lng) return;
     const color = STATUS_COLOR[rep.status] || '#999';
@@ -163,9 +187,10 @@ function drawMarkers(){
     mk.bindPopup('<b>'+(STATUS_LABEL[rep.status]||rep.status)+'</b> '+(rep.tree||'')+'<br>'
       +(rep.placeText? rep.placeText+'<br>':'')+acc);
     markers.push(mk);
-    pts.push([rep.lat, rep.lng]);
+    extend([rep.lat, rep.lng]);
   });
-  if(pts.length){ map.fitBounds(pts, {padding:[40,40], maxZoom:15}); }
+
+  if(bounds && bounds.isValid()){ map.fitBounds(bounds, {padding:[40,40], maxZoom:15}); }
 }
 
 /* ===== 一覧・集計 ===== */
@@ -199,7 +224,7 @@ function renderList(){
     +'  <div class="top"><span class="stat" style="background:'+color+'">'+(STATUS_LABEL[r.status]||r.status)+'</span>'
     +'    <span class="when">'+fmt(r.datetime)+'</span></div>'
     +'  <div class="info">📍 <b>'+esc(loc)+'</b></div>'
-    +'  <div class="info">🌳 '+esc(r.tree||'種類不明')+'　フラス：'+esc(r.frass||'未回答')+'</div>'
+    +'  <div class="info">🌳 '+esc(r.tree||'種類不明')+'　フラス：'+esc(r.frass||'未回答')+'　ヤニ：'+esc(r.yani||'未回答')+'</div>'
     +'  <div class="photos">'+photos+'</div>'
     +'</div>';
   }).join('');
