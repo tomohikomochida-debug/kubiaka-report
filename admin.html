@@ -47,13 +47,13 @@
 
   /* ヘッダー */
   header{background:var(--bark);color:#fff;padding:13px 16px;display:flex;align-items:center;gap:10px;
-    position:sticky;top:0;z-index:30;}
+    position:sticky;top:0;z-index:1100;}
   header .title{font-family:'Zen Maru Gothic',sans-serif;font-weight:700;font-size:16px;}
   header .reload{margin-left:auto;background:rgba(255,255,255,.18);border:none;color:#fff;
     border-radius:9px;padding:8px 13px;font-size:13px;font-family:inherit;cursor:pointer;font-weight:700;}
 
   /* タブ */
-  .tabs{display:flex;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:48px;z-index:29;}
+  .tabs{display:flex;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:48px;z-index:1090;}
   .tab{flex:1;text-align:center;padding:12px;font-weight:700;font-size:14px;color:var(--ink-soft);
     cursor:pointer;border-bottom:3px solid transparent;}
   .tab.on{color:var(--bark);border-bottom-color:var(--bark);}
@@ -91,7 +91,7 @@
   .btn-edit{background:#efe7df;color:var(--bark);}
 
   /* 詳細・更新モーダル */
-  .modal{position:fixed;inset:0;z-index:80;background:rgba(38,32,28,.5);display:none;
+  .modal{position:fixed;inset:0;z-index:1200;background:rgba(38,32,28,.5);display:none;
     align-items:flex-end;justify-content:center;}
   .modal.show{display:flex;}
   .sheet{background:#fff;width:100%;max-width:520px;border-radius:20px 20px 0 0;padding:20px;
@@ -114,11 +114,15 @@
   .leaflet-popup-content{font-family:'Zen Kaku Gothic New',sans-serif;font-size:13px;}
   .pop-btn{display:inline-block;margin-top:6px;background:var(--bark);color:#fff;padding:6px 12px;
     border-radius:8px;font-weight:700;cursor:pointer;font-size:12.5px;}
-  .area-bar{background:var(--card);padding:8px 14px;border-top:1px solid var(--line);}
-  .area-btn{width:100%;border:1.5px solid var(--accent);background:#fff;color:var(--accent);
-    border-radius:10px;padding:10px;font-family:inherit;font-weight:700;font-size:13.5px;cursor:pointer;}
+  /* 区担当パネル：地図の右上に浮かせる（地図の高さは変えない） */
+  .area-bar{position:absolute;top:10px;right:10px;z-index:1000;}
+  .area-btn{width:auto;border:1.5px solid var(--accent);background:rgba(255,255,255,.95);color:var(--accent);
+    border-radius:10px;padding:9px 13px;font-family:inherit;font-weight:700;font-size:13px;cursor:pointer;
+    box-shadow:0 2px 8px rgba(38,32,28,.18);}
   .area-btn.on{background:var(--accent);color:#fff;}
-  .area-list{display:none;background:var(--card);padding:6px 14px 14px;border-top:1px solid var(--line);max-height:40vh;overflow-y:auto;}
+  .area-list{display:none;position:absolute;top:52px;right:10px;z-index:1000;
+    width:min(300px,calc(100% - 20px));background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:8px 14px 14px;max-height:min(60vh,420px);overflow-y:auto;box-shadow:0 6px 20px rgba(38,32,28,.22);}
   .area-list.show{display:block;}
   .area-list h4{font-size:13px;color:var(--ink-soft);margin:8px 0;font-weight:700;}
   .area-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #f0e9e2;font-size:13.5px;}
