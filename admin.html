@@ -59,7 +59,7 @@
   .tab.on{color:var(--bark);border-bottom-color:var(--bark);}
 
   /* 地図 */
-  #map{width:100%;height:calc(100vh - 200px);min-height:340px;background:#dfe6e3;}
+  #map{width:100%;height:calc(100vh - 320px);min-height:300px;background:#dfe6e3;}
   .map-msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
     text-align:center;color:var(--ink-soft);font-size:14px;padding:30px;z-index:5;}
   .legend{background:var(--card);padding:10px 14px;display:flex;flex-wrap:wrap;gap:10px 16px;
@@ -118,7 +118,7 @@
   .area-btn{width:100%;border:1.5px solid var(--accent);background:#fff;color:var(--accent);
     border-radius:10px;padding:10px;font-family:inherit;font-weight:700;font-size:13.5px;cursor:pointer;}
   .area-btn.on{background:var(--accent);color:#fff;}
-  .area-list{display:none;background:var(--card);padding:6px 14px 14px;border-top:1px solid var(--line);}
+  .area-list{display:none;background:var(--card);padding:6px 14px 14px;border-top:1px solid var(--line);max-height:40vh;overflow-y:auto;}
   .area-list.show{display:block;}
   .area-list h4{font-size:13px;color:var(--ink-soft);margin:8px 0;font-weight:700;}
   .area-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #f0e9e2;font-size:13.5px;}
@@ -151,6 +151,10 @@
 
 <!-- 地図ビュー -->
 <div id="mapWrap" style="display:none;">
+  <div class="area-bar">
+    <button id="areaToggle" class="area-btn">🗺 区の担当状況を表示</button>
+  </div>
+  <div class="area-list" id="areaList"></div>
   <div style="position:relative;">
     <div id="map"></div>
     <div class="map-msg" id="mapMsg" style="display:none;"></div>
@@ -162,10 +166,6 @@
     <span><i class="dot" style="background:var(--c-shiro)"></i>シロ</span>
     <span><i class="dot" style="background:var(--c-kanryo)"></i>完了</span>
   </div>
-  <div class="area-bar">
-    <button id="areaToggle" class="area-btn">🗺 区の担当状況を表示</button>
-  </div>
-  <div class="area-list" id="areaList"></div>
 </div>
 
 <!-- 一覧ビュー -->
@@ -314,7 +314,7 @@ function renderList(){
     +    (r.urgency?'<span class="stat" style="background:#444">緊急'+r.urgency+'</span>':'')
     +'    <span class="when">'+fmt(r.datetime)+'</span></div>'
     +'  <div class="info">📍 <b>'+esc(loc)+'</b>'+methodNote+'</div>'
-    +'  <div class="info">🌳 '+esc(r.tree||'種類不明')+'　フラス：'+esc(r.frass||'未回答')+'　穴：'+esc(r.hole||'未回答')+'</div>'
+    +'  <div class="info">🌳 '+esc(r.tree||'種類不明')+'　フラス：'+esc(r.frass||'未回答')+'　ヤニ：'+esc(r.yani||'未回答')+'　穴：'+esc(r.hole||'未回答')+'</div>'
     +(r.note?'  <div class="info">📝 '+esc(r.note)+'</div>':'')
     +(r.worker?'  <div class="info">🚶 担当：<b>'+esc(r.worker)+'</b></div>':'')
     +'  <div class="photos">'+photos+'</div>'
@@ -464,11 +464,24 @@ let areaLayer = null;
 let areaShown = false;
 
 function loadAreas(cb){
-  if(!GAS_URL){ AREAS = demoAreas(); if(cb) cb(); return; }
+  if(!GAS_URL){ AREAS = demoAreas(); AREAS.forEach(normalizeColor); if(cb) cb(); return; }
   fetch(GAS_URL + '?action=area')
     .then(function(r){ return r.json(); })
-    .then(function(d){ AREAS = (d.result==='ok' ? d.areas : []) || []; if(cb) cb(); })
+    .then(function(d){ AREAS = (d.result==='ok' ? d.areas : []) || []; AREAS.forEach(normalizeColor); if(cb) cb(); })
     .catch(function(){ AREAS = []; if(cb) cb(); });
+}
+
+// 色名（青・緑など）もカラーコードに変換。すでに#始まりならそのまま
+const COLOR_NAMES = {
+  '青':'#4a90d9','緑':'#5d7d59','橙':'#e8742f','オレンジ':'#e8742f',
+  '紫':'#9b59b6','赤':'#d9483b','黄':'#e8a13a','黄色':'#e8a13a',
+  '水色':'#3ac5d9','ピンク':'#e0738d','茶':'#8a6d3b','茶色':'#8a6d3b','灰':'#9aa0a6','グレー':'#9aa0a6'
+};
+function normalizeColor(a){
+  const c = String(a.color||'').trim();
+  if(!c){ a.color=''; return; }
+  if(c.charAt(0)==='#'){ return; } // すでにコード
+  if(COLOR_NAMES[c]){ a.color = COLOR_NAMES[c]; }
 }
 
 // 区名→担当情報の対応表をつくる
@@ -527,12 +540,29 @@ function renderAreaList(){
   }
   const assigned = AREAS.filter(function(a){ return a.worker; });
   const empty = AREAS.filter(function(a){ return !a.worker; });
-  let html = '<h4>担当あり（'+assigned.length+'）</h4>';
-  html += assigned.map(function(a){
-    return '<div class="area-row"><span class="area-chip" style="background:'+(a.color||'#5d7d59')+'"></span>'
-      +'<span class="area-name">'+esc(a.name)+'　<b>'+esc(a.worker)+'</b></span>'
-      +'<span class="area-cnt">報告'+a.reportCount+'件</span></div>';
+
+  // 担当者ごとにまとめる
+  const byWorker = {};
+  assigned.forEach(function(a){
+    if(!byWorker[a.worker]) byWorker[a.worker] = { color:a.color||'#5d7d59', areas:[] };
+    byWorker[a.worker].areas.push(a);
+  });
+
+  const workerNames = Object.keys(byWorker);
+  let html = '<h4>担当者ごと（'+workerNames.length+'名）</h4>';
+  html += workerNames.map(function(name){
+    const w = byWorker[name];
+    const areaText = w.areas.map(function(a){
+      const cnt = a.reportCount>0 ? '('+a.reportCount+'件)' : '';
+      return esc(a.name)+cnt;
+    }).join('、');
+    return '<div class="area-row">'
+      +'<span class="area-chip" style="background:'+w.color+'"></span>'
+      +'<span class="area-name"><b>'+esc(name)+'</b>　'+areaText
+      +'　<span class="area-cnt">計'+w.areas.length+'エリア</span></span>'
+      +'</div>';
   }).join('');
+
   html += '<h4 style="margin-top:14px;">空白地帯（'+empty.length+'）― 報告が多い順に勧誘候補</h4>';
   empty.sort(function(x,y){ return y.reportCount - x.reportCount; });
   html += empty.map(function(a){
@@ -594,13 +624,13 @@ function driveThumb(url){
 function demoData(){
   return [
     {rowIndex:2,id:'R-demo1',datetime:'2026-05-30 10:12',lat:35.575,lng:139.575,
-     photos:[],frass:'はい',hole:'はい',adult:'いいえ',tree:'サクラ',note:'根元に木くずが多い',
+     photos:[],frass:'はい',yani:'はい',hole:'はい',adult:'いいえ',tree:'サクラ',note:'根元に木くずが多い',
      status:'未確認',worker:'',urgency:'',memo:'',locMethod:'GPS',placeText:'宮前区○○公園',acc:12,contact:'090-0000-0000'},
     {rowIndex:3,id:'R-demo2',datetime:'2026-05-29 16:40',lat:35.44,lng:139.62,
-     photos:[],frass:'わからない',hole:'いいえ',adult:'いいえ',tree:'わからない',note:'',
+     photos:[],frass:'わからない',yani:'いいえ',hole:'いいえ',adult:'いいえ',tree:'わからない',note:'',
      status:'確認予定',worker:'田中',urgency:'中',memo:'明日見に行く',locMethod:'地名変換',placeText:'横浜市○○区××',acc:''},
     {rowIndex:4,id:'R-demo3',datetime:'2026-05-28 09:05',lat:null,lng:null,
-     photos:[],frass:'はい',hole:'わからない',adult:'はい',tree:'サクラ',note:'川沿いの並木',
+     photos:[],frass:'はい',yani:'はい',hole:'わからない',adult:'はい',tree:'サクラ',note:'川沿いの並木',
      status:'要対応',worker:'佐藤',urgency:'高',memo:'',locMethod:'手入力のみ',placeText:'多摩川沿いの遊歩道あたり',acc:''}
   ];
 }
