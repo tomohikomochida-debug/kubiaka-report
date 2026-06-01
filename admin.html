@@ -64,6 +64,7 @@
     text-align:center;color:var(--ink-soft);font-size:14px;padding:30px;z-index:5;}
   .legend{background:var(--card);padding:10px 14px;display:flex;flex-wrap:wrap;gap:10px 16px;
     border-top:1px solid var(--line);font-size:12.5px;}
+  .legend-note{flex-basis:100%;font-size:11.5px;color:var(--ink-soft);margin-top:2px;line-height:1.6;}
   .legend span{display:flex;align-items:center;gap:5px;}
   .dot{width:13px;height:13px;border-radius:50%;display:inline-block;}
   .ring{width:14px;height:14px;border-radius:50%;border:2px dashed var(--c-mikakunin);
@@ -172,6 +173,9 @@
     <span><i class="dot" style="background:var(--c-shiro)"></i>シロ</span>
     <span><i class="dot" style="background:var(--c-kanryo)"></i>完了</span>
     <span><i class="ring"></i>要注意区域（半径3km）</span>
+    <div class="legend-note">ピンの色は対応状況を表します。<br>
+      未確認＝まだ現地を確認していない／確認予定＝担当者が確認に行く予定／要対応＝被害を確認、対応が必要／シロ＝確認の結果クビアカではなかった／完了＝駆除などの対応が済んだ。<br>
+      赤い破線の円は、発生が確認された地点（要対応・完了）から半径3kmの要注意区域です。</div>
   </div>
 </div>
 
