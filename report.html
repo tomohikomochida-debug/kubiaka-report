@@ -57,18 +57,19 @@
   .req{font-size:11.5px;font-weight:700;color:#fff;background:var(--danger);padding:2px 9px;border-radius:999px;margin-left:auto;}
   .opt{font-size:11.5px;font-weight:700;color:var(--leaf-deep);background:#eaf1e8;padding:2px 9px;border-radius:999px;margin-left:auto;}
   .step-desc{font-size:14px;color:var(--ink-soft);margin:2px 0 16px;padding-left:41px;}
-  .sample{display:flex;gap:12px;align-items:center;background:var(--sakura-soft);
-    border-radius:14px;padding:11px 13px;margin-bottom:14px;}
-  .sample-img{flex:none;width:62px;height:62px;border-radius:11px;background:#fff;border:1px dashed var(--sakura);
-    display:grid;place-items:center;font-size:11px;color:var(--sakura-deep);text-align:center;line-height:1.3;overflow:hidden;}
-  .sample-img img{width:100%;height:100%;object-fit:cover;}
-  .sample-txt{font-size:13px;color:var(--bark);}
+  .sample{display:block;background:var(--sakura-soft);
+    border-radius:14px;padding:13px;margin-bottom:14px;}
+  .sample-img{width:100%;border-radius:11px;background:#fff;border:1px dashed var(--sakura);
+    overflow:hidden;}
+  .sample-img img{width:100%;height:auto;display:block;}
+  .sample-txt{font-size:13px;color:var(--bark);margin-bottom:10px;}
   .sample-txt b{color:var(--sakura-deep);}
-  .sample-two{flex-wrap:wrap;}
-  .sample-col{flex:none;text-align:center;}
-  .sample-cap{font-size:11.5px;color:var(--bark);margin-top:4px;}
+  .sample-two{}
+  .sample-cols{display:flex;gap:10px;}
+  .sample-col{flex:1;text-align:center;}
+  .sample-cap{font-size:12.5px;color:var(--bark);margin-top:6px;}
   .sample-cap b{color:var(--sakura-deep);}
-  .sample-txt-two{flex:1;min-width:150px;}
+  .sample-txt-two{}
   .shot{display:block;width:100%;border:2px dashed var(--sakura);background:#fff8fa;color:var(--sakura-deep);
     border-radius:14px;padding:20px;font-family:'Zen Maru Gothic',sans-serif;font-weight:700;font-size:16px;
     cursor:pointer;transition:.2s;text-align:center;}
@@ -160,8 +161,8 @@
     <div class="step-head"><span class="step-no">1</span><span class="step-title">木の全体を撮る</span><span class="req">必須</span></div>
     <p class="step-desc">どの木か分かるように、少し離れて全体を撮ってください。</p>
     <div class="sample">
-      <div class="sample-img"><img src="sample_zenkei.jpg" alt="全景のお手本"></div>
       <div class="sample-txt">木の<b>幹から枝先まで</b>入るように。周りの様子も写ると場所が分かりやすいです。</div>
+      <div class="sample-img"><img src="sample_zenkei.jpg" alt="全景のお手本"></div>
     </div>
     <label class="shot" for="photo1"><span class="ico">📷</span>木の全体を撮影／選ぶ</label>
     <input type="file" id="photo1" accept="image/*">
@@ -173,15 +174,17 @@
     <div class="step-head"><span class="step-no">2</span><span class="step-title">被害部を近くで撮る</span><span class="req">必須</span></div>
     <p class="step-desc">幹の根元の「木くず」や、幹の「穴」など、気になる部分を近づいて撮ってください。</p>
     <div class="sample sample-two">
-      <div class="sample-col">
-        <div class="sample-img"><img src="sample_frass.jpg" alt="フラスのお手本"></div>
-        <div class="sample-cap"><b>フラス</b>（木くず）</div>
-      </div>
-      <div class="sample-col">
-        <div class="sample-img"><img src="sample_yani.jpg" alt="ヤニのお手本"></div>
-        <div class="sample-cap"><b>ヤニ</b>（樹液）</div>
-      </div>
       <div class="sample-txt sample-txt-two">根元の<b>かりんとう状の木くず（フラス）</b>や、幹からにじむ<b>ヤニ（樹液）</b>が手がかりです。似たものがあれば大きく写してください。</div>
+      <div class="sample-cols">
+        <div class="sample-col">
+          <div class="sample-img"><img src="sample_frass.jpg" alt="フラスのお手本"></div>
+          <div class="sample-cap"><b>フラス</b>（木くず）</div>
+        </div>
+        <div class="sample-col">
+          <div class="sample-img"><img src="sample_yani.jpg" alt="ヤニのお手本"></div>
+          <div class="sample-cap"><b>ヤニ</b>（樹液）</div>
+        </div>
+      </div>
     </div>
     <label class="shot" for="photo2"><span class="ico">🔍</span>被害部を撮影／選ぶ</label>
     <input type="file" id="photo2" accept="image/*">
