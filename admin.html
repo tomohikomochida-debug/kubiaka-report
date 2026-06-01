@@ -254,6 +254,8 @@ function initMap(){
     map = L.map('map').setView([35.52, 139.55], 11); // 神奈川県あたり
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
       {attribution:'© OpenStreetMap', maxZoom:19}).addTo(map);
+    // 縮尺バー（ズームに連動してkm/mが切り替わる・メートル法のみ）
+    L.control.scale({position:'bottomleft', metric:true, imperial:false, maxWidth:120}).addTo(map);
     setTimeout(function(){ if(map) map.invalidateSize(); }, 200);
   }catch(err){
     map = null;
