@@ -59,13 +59,15 @@
   .tab.on{color:var(--bark);border-bottom-color:var(--bark);}
 
   /* 地図 */
-  #map{width:100%;height:calc(100vh - 320px);min-height:300px;background:#dfe6e3;}
+  #map{width:100%;height:calc(100vh - 180px);height:calc(100dvh - 180px);min-height:360px;background:#dfe6e3;}
   .map-msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
     text-align:center;color:var(--ink-soft);font-size:14px;padding:30px;z-index:5;}
   .legend{background:var(--card);padding:10px 14px;display:flex;flex-wrap:wrap;gap:10px 16px;
     border-top:1px solid var(--line);font-size:12.5px;}
   .legend span{display:flex;align-items:center;gap:5px;}
   .dot{width:13px;height:13px;border-radius:50%;display:inline-block;}
+  .ring{width:14px;height:14px;border-radius:50%;border:2px dashed var(--c-mikakunin);
+    background:rgba(217,72,59,.15);box-sizing:border-box;display:inline-block;}
 
   /* 一覧 */
   .list-view{display:none;padding:14px;}
@@ -169,6 +171,7 @@
     <span><i class="dot" style="background:var(--c-youtaiou)"></i>要対応</span>
     <span><i class="dot" style="background:var(--c-shiro)"></i>シロ</span>
     <span><i class="dot" style="background:var(--c-kanryo)"></i>完了</span>
+    <span><i class="ring"></i>要注意区域（半径3km）</span>
   </div>
 </div>
 
@@ -195,6 +198,10 @@ const STATUS = ['未確認','確認予定','要対応','シロ','完了'];
 const STATUS_COLOR = {
   '未確認':'#d9483b','確認予定':'#e8a13a','要対応':'#e8742f','シロ':'#9aa0a6','完了':'#5d7d59'
 };
+// 要注意区域の設定 ──────────────────────────────
+const CAUTION_RADIUS_M = 3000;             // 半径（メートル）＝3km
+const CONFIRMED_STATUS = ['要対応','完了']; // 「発生確認」とみなす状態。ここを編集すれば対象を変更できる
+// ───────────────────────────────────────────
 let PASS = '';
 let REPORTS = [];
 let map = null, markers = [];
@@ -267,7 +274,22 @@ function drawMarkers(){
   if(!map) return;
   markers.forEach(function(m){ map.removeLayer(m); });
   markers = [];
-  const pts = [];
+  let bounds = null;
+  function extend(b){ if(!bounds){ bounds = L.latLngBounds(b); } else { bounds.extend(b); } }
+
+  // ① 要注意区域：発生確認地点（CONFIRMED_STATUS）から半径3km。フィルタに関係なく常時表示
+  REPORTS.forEach(function(rep){
+    if(!rep.lat || !rep.lng) return;
+    if(CONFIRMED_STATUS.indexOf(rep.status) < 0) return;
+    const zone = L.circle([rep.lat, rep.lng], {
+      radius: CAUTION_RADIUS_M, color:'#d9483b', weight:2.5, dashArray:'6 5',
+      fillColor:'#d9483b', fillOpacity:.15, interactive:false
+    }).addTo(map);
+    markers.push(zone);
+    extend(zone.getBounds());
+  });
+
+  // ② 報告ピン（フィルタ対象・要注意区域の上に描画）
   filtered().forEach(function(rep){
     if(!rep.lat || !rep.lng) return;
     const color = STATUS_COLOR[rep.status] || '#999';
@@ -283,9 +305,10 @@ function drawMarkers(){
       +'<div class="pop-btn" onclick="openEdit(\''+rep.id+'\')">詳細・更新</div>'
     );
     markers.push(mk);
-    pts.push([rep.lat, rep.lng]);
+    extend([rep.lat, rep.lng]);
   });
-  if(pts.length){ map.fitBounds(pts, {padding:[40,40], maxZoom:15}); }
+
+  if(bounds && bounds.isValid()){ map.fitBounds(bounds, {padding:[40,40], maxZoom:15}); }
 }
 
 /* ===== フィルタ ===== */
