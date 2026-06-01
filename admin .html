@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>対策室 管理ページ｜クビアカツヤカミキリ対策室</title>
+
+<!-- ════════════════════════════════════════════════════════════
+     ★設定エリア★  ここだけ書き換えてください
+════════════════════════════════════════════════════════════ -->
+<script>
+  const GAS_URL = "https://script.google.com/macros/s/AKfycbzinuU7Um6F9nOv0eOigQ2jRB2D6ToalNbZ0G1SiY3ngHX4q3hu10FjLWBVz5vPTkq7-Q/exec";   // ← GASのウェブアプリURLを貼る（入力ページと同じURL）
+
+  // 区担当（活動範囲）の塗り分け用 境界データ
+  const GEOJSON_PATH = "kanagawa.geojson"; // 同じフォルダに置いた境界ファイル名
+  const AREA_NAME_PROP = "N03_004";        // 境界データ内の「市区町村名」プロパティ名（データに合わせて変更）
+</script>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --ink:#26201c; --ink-soft:#6f635b; --bg:#f5f1ec; --card:#ffffff;
+    --line:#e3d9cf; --bark:#6b4f3a; --accent:#5d7d59;
+    /* 対応状況の色 */
+    --c-mikakunin:#d9483b; --c-yotei:#e8a13a; --c-youtaiou:#e8742f;
+    --c-shiro:#9aa0a6; --c-kanryo:#5d7d59;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+  body{font-family:'Zen Kaku Gothic New',sans-serif;color:var(--ink);background:var(--bg);
+    line-height:1.7;font-size:15px;}
+
+  /* ログイン */
+  .login{position:fixed;inset:0;z-index:100;background:var(--bg);display:flex;
+    flex-direction:column;align-items:center;justify-content:center;padding:30px;}
+  .login.hide{display:none;}
+  .login h1{font-family:'Zen Maru Gothic',sans-serif;font-size:21px;color:var(--bark);margin-bottom:8px;text-align:center;}
+  .login p{color:var(--ink-soft);font-size:14px;margin-bottom:22px;text-align:center;}
+  .login input{width:100%;max-width:300px;border:1.5px solid var(--line);border-radius:12px;
+    padding:14px;font-size:16px;font-family:inherit;text-align:center;}
+  .login button{width:100%;max-width:300px;margin-top:12px;border:none;border-radius:12px;padding:15px;
+    background:var(--bark);color:#fff;font-family:'Zen Maru Gothic',sans-serif;font-weight:700;font-size:16px;cursor:pointer;}
+  .login .err{color:var(--c-mikakunin);font-size:13px;margin-top:12px;min-height:18px;}
+
+  /* ヘッダー */
+  header{background:var(--bark);color:#fff;padding:13px 16px;display:flex;align-items:center;gap:10px;
+    position:sticky;top:0;z-index:1100;}
+  header .title{font-family:'Zen Maru Gothic',sans-serif;font-weight:700;font-size:16px;}
+  header .reload{margin-left:auto;background:rgba(255,255,255,.18);border:none;color:#fff;
+    border-radius:9px;padding:8px 13px;font-size:13px;font-family:inherit;cursor:pointer;font-weight:700;}
+
+  /* タブ */
+  .tabs{display:flex;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:48px;z-index:1090;}
+  .tab{flex:1;text-align:center;padding:12px;font-weight:700;font-size:14px;color:var(--ink-soft);
+    cursor:pointer;border-bottom:3px solid transparent;}
+  .tab.on{color:var(--bark);border-bottom-color:var(--bark);}
+
+  /* 地図 */
+  #map{width:100%;height:calc(100vh - 320px);min-height:300px;background:#dfe6e3;}
+  .map-msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    text-align:center;color:var(--ink-soft);font-size:14px;padding:30px;z-index:5;}
+  .legend{background:var(--card);padding:10px 14px;display:flex;flex-wrap:wrap;gap:10px 16px;
+    border-top:1px solid var(--line);font-size:12.5px;}
+  .legend span{display:flex;align-items:center;gap:5px;}
+  .dot{width:13px;height:13px;border-radius:50%;display:inline-block;}
+
+  /* 一覧 */
+  .list-view{display:none;padding:14px;}
+  .list-view.on{display:block;}
+  .filter{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px;}
+  .filter button{border:1.5px solid var(--line);background:#fff;border-radius:999px;
+    padding:7px 13px;font-size:13px;font-family:inherit;cursor:pointer;color:var(--ink-soft);}
+  .filter button.on{background:var(--bark);color:#fff;border-color:var(--bark);font-weight:700;}
+  .rep{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px;
+    border-left:5px solid var(--line);}
+  .rep .top{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+  .rep .stat{font-size:12px;font-weight:700;color:#fff;padding:2px 10px;border-radius:999px;}
+  .rep .when{font-size:12px;color:var(--ink-soft);margin-left:auto;}
+  .rep .info{font-size:13.5px;color:var(--ink-soft);margin-bottom:4px;}
+  .rep .info b{color:var(--ink);}
+  .rep .photos{display:flex;gap:6px;margin:8px 0;flex-wrap:wrap;}
+  .rep .photos a{width:64px;height:64px;border-radius:8px;overflow:hidden;background:#eee;display:block;}
+  .rep .photos img{width:100%;height:100%;object-fit:cover;}
+  .rep .act{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px;}
+  .rep .act button{flex:1;min-width:90px;border:none;border-radius:10px;padding:10px;font-size:13px;
+    font-weight:700;font-family:inherit;cursor:pointer;}
+  .btn-go{background:var(--c-yotei);color:#fff;}
+  .btn-edit{background:#efe7df;color:var(--bark);}
+
+  /* 詳細・更新モーダル */
+  .modal{position:fixed;inset:0;z-index:1200;background:rgba(38,32,28,.5);display:none;
+    align-items:flex-end;justify-content:center;}
+  .modal.show{display:flex;}
+  .sheet{background:#fff;width:100%;max-width:520px;border-radius:20px 20px 0 0;padding:20px;
+    max-height:88vh;overflow-y:auto;}
+  .sheet h3{font-family:'Zen Maru Gothic',sans-serif;color:var(--bark);font-size:17px;margin-bottom:4px;}
+  .sheet .sub{font-size:12.5px;color:var(--ink-soft);margin-bottom:16px;}
+  .sheet label{display:block;font-weight:700;font-size:13.5px;margin:14px 0 7px;}
+  .seg{display:flex;flex-wrap:wrap;gap:6px;}
+  .seg button{border:1.5px solid var(--line);background:#fff;border-radius:9px;padding:9px 11px;
+    font-size:13px;font-family:inherit;cursor:pointer;color:var(--ink-soft);}
+  .seg button.on{color:#fff;font-weight:700;border-color:transparent;}
+  .sheet input,.sheet textarea{width:100%;border:1.5px solid var(--line);border-radius:10px;
+    padding:11px;font-family:inherit;font-size:14.5px;}
+  .sheet .save{width:100%;margin-top:18px;border:none;border-radius:12px;padding:15px;
+    background:var(--accent);color:#fff;font-family:'Zen Maru Gothic',sans-serif;font-weight:700;font-size:16px;cursor:pointer;}
+  .sheet .close{width:100%;margin-top:8px;background:none;border:none;color:var(--ink-soft);font-size:14px;cursor:pointer;padding:8px;}
+  .contact-box{background:#fbf3ee;border-radius:10px;padding:10px 12px;font-size:13.5px;margin-top:6px;}
+
+  .loading{text-align:center;padding:40px;color:var(--ink-soft);}
+  .leaflet-popup-content{font-family:'Zen Kaku Gothic New',sans-serif;font-size:13px;}
+  .pop-btn{display:inline-block;margin-top:6px;background:var(--bark);color:#fff;padding:6px 12px;
+    border-radius:8px;font-weight:700;cursor:pointer;font-size:12.5px;}
+  /* 区担当パネル：地図の右上に浮かせる（地図の高さは変えない） */
+  .area-bar{position:absolute;top:10px;right:10px;z-index:1000;}
+  .area-btn{width:auto;border:1.5px solid var(--accent);background:rgba(255,255,255,.95);color:var(--accent);
+    border-radius:10px;padding:9px 13px;font-family:inherit;font-weight:700;font-size:13px;cursor:pointer;
+    box-shadow:0 2px 8px rgba(38,32,28,.18);}
+  .area-btn.on{background:var(--accent);color:#fff;}
+  .area-list{display:none;position:absolute;top:52px;right:10px;z-index:1000;
+    width:min(300px,calc(100% - 20px));background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:8px 14px 14px;max-height:min(60vh,420px);overflow-y:auto;box-shadow:0 6px 20px rgba(38,32,28,.22);}
+  .area-list.show{display:block;}
+  .area-list h4{font-size:13px;color:var(--ink-soft);margin:8px 0;font-weight:700;}
+  .area-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #f0e9e2;font-size:13.5px;}
+  .area-chip{flex:none;width:14px;height:14px;border-radius:4px;border:1px solid #ccc;}
+  .area-name{flex:1;}
+  .area-cnt{font-size:12px;color:var(--ink-soft);}
+  .area-empty{color:var(--c-mikakunin);font-weight:700;font-size:12px;}
+</style>
+</head>
+<body>
+
+<!-- ログイン -->
+<div class="login" id="login">
+  <h1>対策室 管理ページ</h1>
+  <p>合言葉を入力してください</p>
+  <input type="password" id="passInput" placeholder="合言葉" autocomplete="current-password">
+  <button id="loginBtn">入る</button>
+  <div class="err" id="loginErr"></div>
+</div>
+
+<header style="display:none;" id="appHeader">
+  <span class="title">🌸 クビアカ報告 管理</span>
+  <button class="reload" id="reloadBtn">↻ 更新</button>
+</header>
+
+<div class="tabs" id="tabs" style="display:none;">
+  <div class="tab on" data-tab="map">地図</div>
+  <div class="tab" data-tab="list">一覧</div>
+</div>
+
+<!-- 地図ビュー -->
+<div id="mapWrap" style="display:none;">
+  <div style="position:relative;">
+    <div id="map"></div>
+    <div class="map-msg" id="mapMsg" style="display:none;"></div>
+    <div class="area-bar">
+      <button id="areaToggle" class="area-btn">🗺 区の担当状況を表示</button>
+    </div>
+    <div class="area-list" id="areaList"></div>
+  </div>
+  <div class="legend">
+    <span><i class="dot" style="background:var(--c-mikakunin)"></i>未確認</span>
+    <span><i class="dot" style="background:var(--c-yotei)"></i>確認予定</span>
+    <span><i class="dot" style="background:var(--c-youtaiou)"></i>要対応</span>
+    <span><i class="dot" style="background:var(--c-shiro)"></i>シロ</span>
+    <span><i class="dot" style="background:var(--c-kanryo)"></i>完了</span>
+  </div>
+</div>
+
+<!-- 一覧ビュー -->
+<div class="list-view" id="listWrap">
+  <div class="filter" id="filter">
+    <button class="on" data-f="all">すべて</button>
+    <button data-f="未確認">未確認</button>
+    <button data-f="確認予定">確認予定</button>
+    <button data-f="要対応">要対応</button>
+    <button data-f="完了">完了</button>
+  </div>
+  <div id="listBody"><div class="loading">読み込み中…</div></div>
+</div>
+
+<!-- 更新モーダル -->
+<div class="modal" id="modal">
+  <div class="sheet" id="sheetBody"></div>
+</div>
+
+<script>
+/* ===== 状態 ===== */
+const STATUS = ['未確認','確認予定','要対応','シロ','完了'];
+const STATUS_COLOR = {
+  '未確認':'#d9483b','確認予定':'#e8a13a','要対応':'#e8742f','シロ':'#9aa0a6','完了':'#5d7d59'
+};
+let PASS = '';
+let REPORTS = [];
+let map = null, markers = [];
+let curFilter = 'all';
+let editing = null; // 編集中レポート
+
+/* ===== ログイン ===== */
+document.getElementById('loginBtn').addEventListener('click', tryLogin);
+document.getElementById('passInput').addEventListener('keydown', function(e){ if(e.key==='Enter') tryLogin(); });
+
+function tryLogin(){
+  const p = document.getElementById('passInput').value.trim();
+  if(!p){ document.getElementById('loginErr').textContent='合言葉を入力してください'; return; }
+  PASS = p;
+  document.getElementById('loginErr').textContent='確認中…';
+  loadReports(function(ok){
+    if(ok){
+      document.getElementById('login').classList.add('hide');
+      document.getElementById('appHeader').style.display='flex';
+      document.getElementById('tabs').style.display='flex';
+      document.getElementById('mapWrap').style.display='block';
+      initMap();
+      render();
+    }else{
+      document.getElementById('loginErr').textContent='合言葉が違うか、接続できませんでした';
+    }
+  });
+}
+
+/* ===== データ取得 ===== */
+function loadReports(cb){
+  if(!GAS_URL){
+    // デモデータ（GAS未設定時に画面確認用）
+    REPORTS = demoData();
+    if(cb) cb(true);
+    return;
+  }
+  fetch(GAS_URL + '?action=list&pass=' + encodeURIComponent(PASS))
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if(d.result==='ok'){ REPORTS = d.reports || []; if(cb) cb(true); }
+      else { if(cb) cb(false); }
+    })
+    .catch(function(){ if(cb) cb(false); });
+}
+
+/* ===== 地図 ===== */
+function initMap(){
+  const msg = document.getElementById('mapMsg');
+  // Leafletが読み込めているか確認
+  if(typeof L === 'undefined'){
+    msg.style.display='flex';
+    msg.innerHTML='地図ライブラリを読み込めませんでした。<br>「一覧」タブはご利用いただけます。<br>（公開後のネット接続環境では地図も表示されます）';
+    return;
+  }
+  try{
+    map = L.map('map').setView([35.52, 139.55], 11); // 神奈川県あたり
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      {attribution:'© OpenStreetMap', maxZoom:19}).addTo(map);
+    setTimeout(function(){ if(map) map.invalidateSize(); }, 200);
+  }catch(err){
+    map = null;
+    msg.style.display='flex';
+    msg.innerHTML='地図を表示できませんでした。<br>「一覧」タブはご利用いただけます。';
+  }
+}
+function drawMarkers(){
+  if(!map) return;
+  markers.forEach(function(m){ map.removeLayer(m); });
+  markers = [];
+  const pts = [];
+  filtered().forEach(function(rep){
+    if(!rep.lat || !rep.lng) return;
+    const color = STATUS_COLOR[rep.status] || '#999';
+    const mk = L.circleMarker([rep.lat, rep.lng], {
+      radius:9, fillColor:color, color:'#fff', weight:2, fillOpacity:.9
+    }).addTo(map);
+    const acc = rep.locMethod==='地名変換' ? '（地名からのおおよその位置）'
+              : rep.locMethod==='手入力のみ' ? '（場所は文字のみ・要確認）' : '';
+    mk.bindPopup(
+      '<b>'+rep.status+'</b> '+(rep.tree||'')+'<br>'
+      +(rep.placeText? rep.placeText+'<br>':'')
+      + acc
+      +'<div class="pop-btn" onclick="openEdit(\''+rep.id+'\')">詳細・更新</div>'
+    );
+    markers.push(mk);
+    pts.push([rep.lat, rep.lng]);
+  });
+  if(pts.length){ map.fitBounds(pts, {padding:[40,40], maxZoom:15}); }
+}
+
+/* ===== フィルタ ===== */
+function filtered(){
+  if(curFilter==='all') return REPORTS;
+  return REPORTS.filter(function(r){ return r.status===curFilter; });
+}
+
+/* ===== 描画 ===== */
+function render(){
+  if(map) drawMarkers();
+  renderList();
+}
+function renderList(){
+  const body = document.getElementById('listBody');
+  const items = filtered().slice().reverse(); // 新しい順
+  if(!items.length){ body.innerHTML='<div class="loading">該当する報告はありません</div>'; return; }
+  body.innerHTML = items.map(function(r){
+    const color = STATUS_COLOR[r.status]||'#999';
+    let photos = '';
+    (r.photos||[]).forEach(function(u){
+      const dl = driveThumb(u);
+      photos += '<a href="'+u+'" target="_blank"><img src="'+dl+'" alt=""></a>';
+    });
+    const loc = r.placeText ? r.placeText
+              : (r.lat ? '地図あり' : '場所情報なし');
+    const methodNote = r.locMethod==='手入力のみ' ? ' ⚠️要確認'
+                     : r.locMethod==='地名変換' ? ' (おおよそ)' : '';
+    return ''
+    +'<div class="rep" style="border-left-color:'+color+'">'
+    +'  <div class="top"><span class="stat" style="background:'+color+'">'+r.status+'</span>'
+    +    (r.urgency?'<span class="stat" style="background:#444">緊急'+r.urgency+'</span>':'')
+    +'    <span class="when">'+fmt(r.datetime)+'</span></div>'
+    +'  <div class="info">📍 <b>'+esc(loc)+'</b>'+methodNote+'</div>'
+    +'  <div class="info">🌳 '+esc(r.tree||'種類不明')+'　フラス：'+esc(r.frass||'未回答')+'　ヤニ：'+esc(r.yani||'未回答')+'　穴：'+esc(r.hole||'未回答')+'</div>'
+    +(r.note?'  <div class="info">📝 '+esc(r.note)+'</div>':'')
+    +(r.worker?'  <div class="info">🚶 担当：<b>'+esc(r.worker)+'</b></div>':'')
+    +'  <div class="photos">'+photos+'</div>'
+    +'  <div class="act">'
+    +'    <button class="btn-go" onclick="quickGo(\''+r.id+'\')">🚶 行きます</button>'
+    +'    <button class="btn-edit" onclick="openEdit(\''+r.id+'\')">詳細・更新</button>'
+    +'  </div>'
+    +'</div>';
+  }).join('');
+}
+
+/* ===== 「行きます」即更新 ===== */
+function quickGo(id){
+  const name = prompt('あなたのお名前を入力してください（担当者として記録します）');
+  if(!name) return;
+  const rep = REPORTS.find(function(r){ return r.id===id; });
+  if(!rep) return;
+  sendUpdate({ rowIndex:rep.rowIndex, status:'確認予定', worker:name }, function(ok){
+    if(ok){ rep.status='確認予定'; rep.worker=name; render(); }
+    else alert('更新に失敗しました。電波を確認してもう一度お試しください。');
+  });
+}
+
+/* ===== 詳細・更新モーダル ===== */
+function openEdit(id){
+  const rep = REPORTS.find(function(r){ return r.id===id; });
+  if(!rep) return;
+  editing = JSON.parse(JSON.stringify(rep));
+  const body = document.getElementById('sheetBody');
+
+  let photos='';
+  (rep.photos||[]).forEach(function(u){
+    photos += '<a href="'+u+'" target="_blank"><img src="'+driveThumb(u)+'" alt=""></a>';
+  });
+
+  let contact='';
+  if(rep.contact){
+    contact = '<div class="contact-box">📞 連絡先（対策室のみ）：'+esc(rep.contact)+'</div>';
+  }
+
+  body.innerHTML = ''
+  +'<h3>報告の詳細・更新</h3>'
+  +'<div class="sub">'+fmt(rep.datetime)+'　ID:'+rep.id+'</div>'
+  +'<div class="info" style="font-size:13.5px;color:var(--ink-soft)">📍 '
+  + esc(rep.placeText||(rep.lat?'地図あり':'場所情報なし'))
+  + (rep.locMethod?'（'+esc(rep.locMethod)+'）':'') +'</div>'
+  +'<div class="photos" style="margin:10px 0">'+photos+'</div>'
+  + contact
+  +'<label>対応状況</label><div class="seg" id="segStatus">'
+  + STATUS.map(function(s){
+      return '<button data-v="'+s+'" style="'+(editing.status===s?'background:'+STATUS_COLOR[s]:'')+'" class="'+(editing.status===s?'on':'')+'">'+s+'</button>';
+    }).join('')
+  +'</div>'
+  +'<label>担当者</label><input type="text" id="inWorker" value="'+esc(rep.worker||'')+'" placeholder="お名前">'
+  +'<label>緊急度</label><div class="seg" id="segUrg">'
+  + ['','高','中','低'].map(function(u){
+      const lbl = u===''?'なし':u;
+      return '<button data-v="'+u+'" style="'+(((editing.urgency||'')===u)?'background:#444':'')+'" class="'+(((editing.urgency||'')===u)?'on':'')+'">'+lbl+'</button>';
+    }).join('')
+  +'</div>'
+  +'<label>対応メモ</label><textarea id="inMemo" rows="2" placeholder="現地の様子・対応内容など">'+esc(rep.memo||'')+'</textarea>'
+  +'<button class="save" id="saveBtn">保存する</button>'
+  +'<button class="close" id="closeBtn">閉じる</button>';
+
+  // セグメント選択
+  body.querySelectorAll('#segStatus button').forEach(function(b){
+    b.addEventListener('click', function(){
+      editing.status=b.dataset.v;
+      body.querySelectorAll('#segStatus button').forEach(function(x){ x.className=''; x.style.background=''; });
+      b.className='on'; b.style.background=STATUS_COLOR[b.dataset.v];
+    });
+  });
+  body.querySelectorAll('#segUrg button').forEach(function(b){
+    b.addEventListener('click', function(){
+      editing.urgency=b.dataset.v;
+      body.querySelectorAll('#segUrg button').forEach(function(x){ x.className=''; x.style.background=''; });
+      b.className='on'; b.style.background='#444';
+    });
+  });
+  document.getElementById('saveBtn').addEventListener('click', saveEdit);
+  document.getElementById('closeBtn').addEventListener('click', closeModal);
+  document.getElementById('modal').classList.add('show');
+}
+
+function saveEdit(){
+  const rep = REPORTS.find(function(r){ return r.id===editing.id; });
+  const payload = {
+    rowIndex: rep.rowIndex,
+    status: editing.status,
+    worker: document.getElementById('inWorker').value.trim(),
+    urgency: editing.urgency||'',
+    memo: document.getElementById('inMemo').value.trim()
+  };
+  document.getElementById('saveBtn').textContent='保存中…';
+  sendUpdate(payload, function(ok){
+    if(ok){
+      rep.status=payload.status; rep.worker=payload.worker;
+      rep.urgency=payload.urgency; rep.memo=payload.memo;
+      closeModal(); render();
+    }else{
+      document.getElementById('saveBtn').textContent='保存する';
+      alert('保存に失敗しました。もう一度お試しください。');
+    }
+  });
+}
+function closeModal(){ document.getElementById('modal').classList.remove('show'); editing=null; }
+document.getElementById('modal').addEventListener('click', function(e){ if(e.target.id==='modal') closeModal(); });
+
+/* ===== 更新送信 ===== */
+function sendUpdate(data, cb){
+  if(!GAS_URL){ if(cb) cb(true); return; } // デモ
+  data.type='update'; data.pass=PASS;
+  fetch(GAS_URL, { method:'POST', body:JSON.stringify(data) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){ if(cb) cb(d.result==='ok'); })
+    .catch(function(){ if(cb) cb(false); });
+}
+
+/* ===== タブ・フィルタ・更新 ===== */
+document.querySelectorAll('.tab').forEach(function(t){
+  t.addEventListener('click', function(){
+    document.querySelectorAll('.tab').forEach(function(x){ x.classList.remove('on'); });
+    t.classList.add('on');
+    const tab=t.dataset.tab;
+    document.getElementById('mapWrap').style.display = tab==='map'?'block':'none';
+    document.getElementById('listWrap').classList.toggle('on', tab==='list');
+    if(tab==='map' && map){ setTimeout(function(){ map.invalidateSize(); drawMarkers(); },100); }
+  });
+});
+document.getElementById('filter').addEventListener('click', function(e){
+  if(e.target.tagName!=='BUTTON') return;
+  document.querySelectorAll('#filter button').forEach(function(x){ x.classList.remove('on'); });
+  e.target.classList.add('on');
+  curFilter=e.target.dataset.f; render();
+});
+document.getElementById('reloadBtn').addEventListener('click', function(){
+  document.getElementById('reloadBtn').textContent='↻ …';
+  loadReports(function(ok){
+    document.getElementById('reloadBtn').textContent='↻ 更新';
+    if(ok) render(); else alert('更新できませんでした');
+  });
+});
+
+/* ===== 区担当（活動範囲） ===== */
+let AREAS = [];
+let areaLayer = null;
+let areaShown = false;
+
+function loadAreas(cb){
+  if(!GAS_URL){ AREAS = demoAreas(); AREAS.forEach(normalizeColor); if(cb) cb(); return; }
+  fetch(GAS_URL + '?action=area')
+    .then(function(r){ return r.json(); })
+    .then(function(d){ AREAS = (d.result==='ok' ? d.areas : []) || []; AREAS.forEach(normalizeColor); if(cb) cb(); })
+    .catch(function(){ AREAS = []; if(cb) cb(); });
+}
+
+// 色名（青・緑など）もカラーコードに変換。すでに#始まりならそのまま
+const COLOR_NAMES = {
+  '青':'#4a90d9','緑':'#5d7d59','橙':'#e8742f','オレンジ':'#e8742f',
+  '紫':'#9b59b6','赤':'#d9483b','黄':'#e8a13a','黄色':'#e8a13a',
+  '水色':'#3ac5d9','ピンク':'#e0738d','茶':'#8a6d3b','茶色':'#8a6d3b','灰':'#9aa0a6','グレー':'#9aa0a6'
+};
+function normalizeColor(a){
+  const c = String(a.color||'').trim();
+  if(!c){ a.color=''; return; }
+  if(c.charAt(0)==='#'){ return; } // すでにコード
+  if(COLOR_NAMES[c]){ a.color = COLOR_NAMES[c]; }
+}
+
+// 区名→担当情報の対応表をつくる
+function areaMap(){
+  const m = {};
+  AREAS.forEach(function(a){ m[a.name] = a; });
+  return m;
+}
+
+// 地図に境界ポリゴンを塗る（境界ファイルがある場合）
+function drawAreaPolygons(){
+  if(!map || typeof L === 'undefined') return Promise.resolve(false);
+  return fetch(GEOJSON_PATH)
+    .then(function(r){ if(!r.ok) throw new Error('no file'); return r.json(); })
+    .then(function(geo){
+      const m = areaMap();
+      areaLayer = L.geoJSON(geo, {
+        style: function(feature){
+          const nm = String(feature.properties[AREA_NAME_PROP] || '');
+          const a = matchArea(m, nm);
+          if(a && a.worker){
+            return { color:'#fff', weight:1, fillColor:(a.color||'#5d7d59'), fillOpacity:.35 };
+          }
+          // 担当者がいない＝空白地帯（赤くうすく）
+          return { color:'#fff', weight:1, fillColor:'#d9483b', fillOpacity:.12, dashArray:'3' };
+        },
+        onEachFeature: function(feature, layer){
+          const nm = String(feature.properties[AREA_NAME_PROP] || '');
+          const a = matchArea(m, nm);
+          const worker = a && a.worker ? a.worker : '（未割当）';
+          const cnt = a ? a.reportCount : 0;
+          layer.bindPopup('<b>'+nm+'</b><br>担当：'+worker+'<br>報告：'+cnt+'件');
+        }
+      }).addTo(map);
+      return true;
+    })
+    .catch(function(){ return false; });
+}
+
+// シートの区名とGeoJSONの区名を突き合わせ（部分一致も許容）
+function matchArea(m, geoName){
+  if(m[geoName]) return m[geoName];
+  // 「宮前区」などの部分一致
+  for(const key in m){
+    if(geoName.indexOf(key)>=0 || key.indexOf(geoName)>=0) return m[key];
+  }
+  return null;
+}
+
+// フォールバック：区担当をリスト表示
+function renderAreaList(){
+  const box = document.getElementById('areaList');
+  if(!AREAS.length){
+    box.innerHTML = '<h4>区担当データがありません</h4><div class="area-cnt">スプレッドシートの「区担当」シートに市区町村名と担当者を入れてください。</div>';
+    return;
+  }
+  const assigned = AREAS.filter(function(a){ return a.worker; });
+  const empty = AREAS.filter(function(a){ return !a.worker; });
+
+  // 担当者ごとにまとめる
+  const byWorker = {};
+  assigned.forEach(function(a){
+    if(!byWorker[a.worker]) byWorker[a.worker] = { color:a.color||'#5d7d59', areas:[] };
+    byWorker[a.worker].areas.push(a);
+  });
+
+  const workerNames = Object.keys(byWorker);
+  let html = '<h4>担当者ごと（'+workerNames.length+'名）</h4>';
+  html += workerNames.map(function(name){
+    const w = byWorker[name];
+    const areaText = w.areas.map(function(a){
+      const cnt = a.reportCount>0 ? '('+a.reportCount+'件)' : '';
+      return esc(a.name)+cnt;
+    }).join('、');
+    return '<div class="area-row">'
+      +'<span class="area-chip" style="background:'+w.color+'"></span>'
+      +'<span class="area-name"><b>'+esc(name)+'</b>　'+areaText
+      +'　<span class="area-cnt">計'+w.areas.length+'エリア</span></span>'
+      +'</div>';
+  }).join('');
+
+  html += '<h4 style="margin-top:14px;">空白地帯（'+empty.length+'）― 報告が多い順に勧誘候補</h4>';
+  empty.sort(function(x,y){ return y.reportCount - x.reportCount; });
+  html += empty.map(function(a){
+    const warn = a.reportCount>0 ? '<span class="area-empty">報告'+a.reportCount+'件・要員不足</span>'
+                                 : '<span class="area-cnt">報告'+a.reportCount+'件</span>';
+    return '<div class="area-row"><span class="area-chip" style="background:#f3dcd6"></span>'
+      +'<span class="area-name">'+esc(a.name)+'</span>'+warn+'</div>';
+  }).join('');
+  box.innerHTML = html;
+}
+
+// トグル
+document.getElementById('areaToggle').addEventListener('click', function(){
+  const btn = this;
+  const box = document.getElementById('areaList');
+  areaShown = !areaShown;
+  btn.classList.toggle('on', areaShown);
+  box.classList.toggle('show', areaShown);
+  if(areaShown){
+    btn.textContent='🗺 区の担当状況を隠す';
+    loadAreas(function(){
+      renderAreaList();
+      // 地図ポリゴンも試みる（境界ファイルがあれば塗る）
+      if(map && !areaLayer){
+        drawAreaPolygons().then(function(ok){
+          if(!ok){
+            // 境界ファイルが無い場合はリストのみ（地図は塗らない）
+          }
+        });
+      }
+    });
+  }else{
+    btn.textContent='🗺 区の担当状況を表示';
+    if(areaLayer && map){ map.removeLayer(areaLayer); areaLayer=null; }
+  }
+});
+
+function demoAreas(){
+  return [
+    {name:'川崎市宮前区',worker:'田中',color:'#4a90d9',reportCount:3},
+    {name:'横浜市青葉区',worker:'佐藤',color:'#5d7d59',reportCount:1},
+    {name:'藤沢市',worker:'',color:'',reportCount:2},
+    {name:'相模原市緑区',worker:'',color:'',reportCount:0},
+    {name:'鎌倉市',worker:'',color:'',reportCount:1}
+  ];
+}
+
+/* ===== ユーティリティ ===== */
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+function fmt(s){ return String(s||'').replace('T',' ').slice(0,16); }
+function driveThumb(url){
+  // GoogleドライブのファイルリンクからサムネイルURLを作る
+  const m = String(url).match(/[-\w]{25,}/);
+  return m ? 'https://drive.google.com/thumbnail?id='+m[0]+'&sz=w200' : url;
+}
+
+/* ===== デモデータ ===== */
+function demoData(){
+  return [
+    {rowIndex:2,id:'R-demo1',datetime:'2026-05-30 10:12',lat:35.575,lng:139.575,
+     photos:[],frass:'はい',yani:'はい',hole:'はい',adult:'いいえ',tree:'サクラ',note:'根元に木くずが多い',
+     status:'未確認',worker:'',urgency:'',memo:'',locMethod:'GPS',placeText:'宮前区○○公園',acc:12,contact:'090-0000-0000'},
+    {rowIndex:3,id:'R-demo2',datetime:'2026-05-29 16:40',lat:35.44,lng:139.62,
+     photos:[],frass:'わからない',yani:'いいえ',hole:'いいえ',adult:'いいえ',tree:'わからない',note:'',
+     status:'確認予定',worker:'田中',urgency:'中',memo:'明日見に行く',locMethod:'地名変換',placeText:'横浜市○○区××',acc:''},
+    {rowIndex:4,id:'R-demo3',datetime:'2026-05-28 09:05',lat:null,lng:null,
+     photos:[],frass:'はい',yani:'はい',hole:'わからない',adult:'はい',tree:'サクラ',note:'川沿いの並木',
+     status:'要対応',worker:'佐藤',urgency:'高',memo:'',locMethod:'手入力のみ',placeText:'多摩川沿いの遊歩道あたり',acc:''}
+  ];
+}
+</script>
+</body>
+</html>
