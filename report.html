@@ -64,6 +64,11 @@
   .sample-img img{width:100%;height:100%;object-fit:cover;}
   .sample-txt{font-size:13px;color:var(--bark);}
   .sample-txt b{color:var(--sakura-deep);}
+  .sample-two{flex-wrap:wrap;}
+  .sample-col{flex:none;text-align:center;}
+  .sample-cap{font-size:11.5px;color:var(--bark);margin-top:4px;}
+  .sample-cap b{color:var(--sakura-deep);}
+  .sample-txt-two{flex:1;min-width:150px;}
   .shot{display:block;width:100%;border:2px dashed var(--sakura);background:#fff8fa;color:var(--sakura-deep);
     border-radius:14px;padding:20px;font-family:'Zen Maru Gothic',sans-serif;font-weight:700;font-size:16px;
     cursor:pointer;transition:.2s;text-align:center;}
@@ -155,7 +160,7 @@
     <div class="step-head"><span class="step-no">1</span><span class="step-title">木の全体を撮る</span><span class="req">必須</span></div>
     <p class="step-desc">どの木か分かるように、少し離れて全体を撮ってください。</p>
     <div class="sample">
-      <div class="sample-img"><!-- お手本画像：<img src="お手本_全景.jpg"> -->全景の<br>お手本</div>
+      <div class="sample-img"><img src="sample_zenkei.jpg" alt="全景のお手本"></div>
       <div class="sample-txt">木の<b>幹から枝先まで</b>入るように。周りの様子も写ると場所が分かりやすいです。</div>
     </div>
     <label class="shot" for="photo1"><span class="ico">📷</span>木の全体を撮影／選ぶ</label>
@@ -167,9 +172,16 @@
   <div class="card">
     <div class="step-head"><span class="step-no">2</span><span class="step-title">被害部を近くで撮る</span><span class="req">必須</span></div>
     <p class="step-desc">幹の根元の「木くず」や、幹の「穴」など、気になる部分を近づいて撮ってください。</p>
-    <div class="sample">
-      <div class="sample-img"><!-- お手本画像：<img src="お手本_フラス.jpg"> -->フラスの<br>お手本</div>
-      <div class="sample-txt">根元に<b>かりんとう状の木くず（フラス）</b>があれば、それを大きく写してください。これが一番の手がかりです。</div>
+    <div class="sample sample-two">
+      <div class="sample-col">
+        <div class="sample-img"><img src="sample_frass.jpg" alt="フラスのお手本"></div>
+        <div class="sample-cap"><b>フラス</b>（木くず）</div>
+      </div>
+      <div class="sample-col">
+        <div class="sample-img"><img src="sample_yani.jpg" alt="ヤニのお手本"></div>
+        <div class="sample-cap"><b>ヤニ</b>（樹液）</div>
+      </div>
+      <div class="sample-txt sample-txt-two">根元の<b>かりんとう状の木くず（フラス）</b>や、幹からにじむ<b>ヤニ（樹液）</b>が手がかりです。似たものがあれば大きく写してください。</div>
     </div>
     <label class="shot" for="photo2"><span class="ico">🔍</span>被害部を撮影／選ぶ</label>
     <input type="file" id="photo2" accept="image/*">
@@ -203,6 +215,12 @@
         <label><input type="radio" name="frass" value="はい"><span>はい</span></label>
         <label><input type="radio" name="frass" value="いいえ"><span>いいえ</span></label>
         <label><input type="radio" name="frass" value="わからない"><span>わからない</span></label>
+      </div></div>
+    <div class="q"><span class="q-label">幹から、お手本のようなヤニ（樹液）がにじんでいましたか？</span>
+      <div class="opts">
+        <label><input type="radio" name="yani" value="はい"><span>はい</span></label>
+        <label><input type="radio" name="yani" value="いいえ"><span>いいえ</span></label>
+        <label><input type="radio" name="yani" value="わからない"><span>わからない</span></label>
       </div></div>
     <div class="q"><span class="q-label">幹に直径1cmくらいの丸い穴がありましたか？</span>
       <div class="opts">
@@ -419,7 +437,7 @@ document.getElementById('submitBtn').addEventListener('click',async function(){
     photos:[photos.photo1,photos.photo2].concat(extras),
     lat:geo.lat,lng:geo.lng,acc:geo.acc,
     locMethod:geo.method||'',placeText:geo.placeText||'',
-    frass:radioVal('frass'),hole:radioVal('hole'),
+    frass:radioVal('frass'),yani:radioVal('yani'),hole:radioVal('hole'),
     adult:radioVal('adult'),tree:radioVal('tree'),
     note:document.getElementById('note').value.trim(),
     contact:document.getElementById('contact').value.trim()
