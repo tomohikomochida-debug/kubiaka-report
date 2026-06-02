@@ -188,7 +188,12 @@
       <label><input type="checkbox" id="koikiGbif"> 発見記録(GBIF) <i class="dot koiki-gbif"></i></label>
       <label><input type="checkbox" id="koikiMuni"> 周辺の発生自治体 <i class="ring koiki-muni"></i></label>
       <div class="legend-note" id="koikiNote" style="display:none;"></div>
-      <div class="legend-note">広域は他団体の公開情報の「参考表示」で、対策室の判定ではありません。発見記録はGBIF（CC0・CC-BYのみ／出典：GBIF.org）、周辺の発生自治体は各自治体・県の公表に基づく事実です（境界データは国土交通省 国土数値情報を自動取得して面で表示）。</div>
+      <div class="legend-note">広域は他団体の公開情報の「参考表示」で、対策室の判定ではありません。発見記録はGBIF（CC0・CC-BY・CC-BY-NC／出典：GBIF.org。新しい記録ほど濃く大きく表示）、周辺の発生自治体は各自治体・県の公表に基づく事実です（境界データは国土交通省 国土数値情報を自動取得して面で表示）。</div>
+      <div class="legend-note">最新を確認：
+        <a href="https://www.kankyo.metro.tokyo.lg.jp/nature/animals_plants/400100a20191204115758336" target="_blank" rel="noopener">東京都環境局</a> ｜
+        <a href="https://www.gbif.org/occurrence/map?taxon_key=5001658&amp;country=JP" target="_blank" rel="noopener">GBIF（クビアカ）</a> ｜
+        <a href="https://www.pref.gunma.jp/page/7132.html" target="_blank" rel="noopener">群馬</a> ｜
+        <a href="https://www.pref.saitama.lg.jp/cess/center/kubiaka.html" target="_blank" rel="noopener">埼玉</a></div>
     </div>
   </div>
 </div>
@@ -698,6 +703,7 @@ const KOIKI = {
   gbifTaxonKey: 5001658,                                          // Aromia bungii（クビアカツヤカミキリ）
   bbox: { latMin:34.9, latMax:37.2, lonMin:138.6, lonMax:140.9 }, // 南関東〜北関東をゆるく囲む範囲
   gbifColor: '#2f8f9d',
+  gbifColorOld: '#a9cdd3',
   muniColor: '#b07a4a',
   // 取り込むライセンス（GBIF）。CC0・CC-BYは出典表示で利用可。
   // CC-BY-NCは「非営利＋出典表示」で利用可（対策室の非営利活動は該当）。商用利用はしないこと。
@@ -769,6 +775,13 @@ function gbifLicLabel(lic){
   return String(lic);
 }
 
+/* GBIF記録の年を取得（year または eventDate先頭4桁） */
+function gbifYear(r){
+  if(r && r.year) return r.year;
+  if(r && r.eventDate){ const m = String(r.eventDate).match(/^(\d{4})/); if(m) return parseInt(m[1],10); }
+  return null;
+}
+
 /* 発見記録（GBIF） */
 function koikiLoadGbif(){
   if(!map){ return; }
@@ -790,21 +803,39 @@ function koikiLoadGbif(){
       const recs = (d.results||[]).filter(function(r){
         return r.decimalLatitude && r.decimalLongitude;
       });
+      // 新しい記録ほど手前・濃く・大きく（直近の動きを追いやすく）
+      recs.sort(function(a,b){ return (gbifYear(b)||0) - (gbifYear(a)||0); });
+      const NOW = new Date().getFullYear();
+      let recent = 0;
       recs.forEach(function(r){
-        const yr = r.year || (r.eventDate ? String(r.eventDate).slice(0,4) : '年不明');
+        const y = gbifYear(r);
+        const isRecent = y && (NOW - y) <= 1;     // 今年・昨年を「直近」とみなす
+        if(isRecent) recent++;
         const by = esc(r.recordedBy || r.datasetName || '提供者不明');
         const lic = gbifLicLabel(r.license);
-        L.circleMarker([r.decimalLatitude, r.decimalLongitude],
-          { radius:6, color:'#fff', weight:2, fillColor:KOIKI.gbifColor, fillOpacity:.85 })
-          .bindPopup('<b>クビアカ発見記録（参考）</b><br>'+yr+'年 '+esc(r.stateProvince||r.county||'')
+        const mk = L.circleMarker([r.decimalLatitude, r.decimalLongitude], {
+          radius:   isRecent ? 8 : 5,
+          color:    isRecent ? '#0e5562' : '#fff',
+          weight:   isRecent ? 2 : 1,
+          fillColor:isRecent ? KOIKI.gbifColor : KOIKI.gbifColorOld,
+          fillOpacity: isRecent ? 0.95 : 0.6
+        }).bindPopup('<b>クビアカ発見記録（参考）</b><br>'+(y||'年不明')+'年 '+esc(r.stateProvince||r.county||r.locality||'')
+            + (isRecent ? '　<span style="color:#0e5562;font-weight:700;">直近</span>' : '')
             +'<div style="font-size:11px;color:#6f635b;border-top:1px dashed #e3d9cf;margin-top:5px;padding-top:4px;">'
             +'提供：'+by+'<br>出典：GBIF.org ／ '+lic+'</div>')
           .addTo(koikiGbifLayer);
+        if(isRecent) mk.bringToFront();
       });
       const total = (d.count!=null) ? d.count : recs.length;
-      koikiMsg.gbif = '発見記録：'+recs.length+'件を表示'
+      const newest = recs.slice(0,5).map(function(r){
+        const y = gbifYear(r); const place = (r.stateProvince||r.county||r.locality||'').toString();
+        return (y? y+'年' : '年不明') + (place ? ' '+esc(place) : '');
+      });
+      let msg = '発見記録：'+recs.length+'件'
         + (total>recs.length ? '（全'+total+'件の一部）' : '')
-        + '　出典：GBIF.org（CC0・CC-BY・CC-BY-NC／非営利・出典表示で利用）';
+        + ' ／ 直近2年 '+recent+'件　出典：GBIF.org（CC0・CC-BY・CC-BY-NC／非営利・出典表示）';
+      if(newest.length) msg += '<br><span style="font-size:11px;color:#6f635b;">新しい記録：'+newest.join('・')+'</span>';
+      koikiMsg.gbif = msg;
       koikiRenderNote();
     })
     .catch(function(){
