@@ -699,6 +699,9 @@ const KOIKI = {
   bbox: { latMin:34.9, latMax:37.2, lonMin:138.6, lonMax:140.9 }, // 南関東〜北関東をゆるく囲む範囲
   gbifColor: '#2f8f9d',
   muniColor: '#b07a4a',
+  // 取り込むライセンス（GBIF）。CC0・CC-BYは出典表示で利用可。
+  // CC-BY-NCは「非営利＋出典表示」で利用可（対策室の非営利活動は該当）。商用利用はしないこと。
+  gbifLicenses: ['CC0_1_0','CC_BY_4_0','CC_BY_NC_4_0'],
 
   // ── 隣県の市区町村データ（面で塗るために使用）──────────────
   //  スマートニュース japan-topography から各県をダウンロードし、
@@ -773,7 +776,7 @@ function koikiLoadGbif(){
   const url = 'https://api.gbif.org/v1/occurrence/search'
     + '?taxonKey=' + KOIKI.gbifTaxonKey
     + '&country=JP&hasCoordinate=true&hasGeospatialIssue=false'
-    + '&license=CC0_1_0&license=CC_BY_4_0'
+    + KOIKI.gbifLicenses.map(function(x){ return '&license=' + x; }).join('')
     + '&decimalLatitude=' + b.latMin + ',' + b.latMax
     + '&decimalLongitude=' + b.lonMin + ',' + b.lonMax
     + '&limit=300';
@@ -782,12 +785,12 @@ function koikiLoadGbif(){
     .then(function(d){
       const recs = (d.results||[]).filter(function(r){
         return r.decimalLatitude && r.decimalLongitude
-          && (r.license==='CC0_1_0' || r.license==='CC_BY_4_0'); // 念のためクライアント側でも限定
+          && KOIKI.gbifLicenses.indexOf(r.license) >= 0; // 念のためクライアント側でも限定
       });
       recs.forEach(function(r){
         const yr = r.year || (r.eventDate ? String(r.eventDate).slice(0,4) : '年不明');
         const by = esc(r.recordedBy || r.datasetName || '提供者不明');
-        const lic = (r.license==='CC0_1_0') ? 'CC0' : 'CC-BY';
+        const lic = ({'CC0_1_0':'CC0','CC_BY_4_0':'CC-BY','CC_BY_NC_4_0':'CC-BY-NC'})[r.license] || r.license;
         L.circleMarker([r.decimalLatitude, r.decimalLongitude],
           { radius:6, color:'#fff', weight:2, fillColor:KOIKI.gbifColor, fillOpacity:.85 })
           .bindPopup('<b>クビアカ発見記録（参考）</b><br>'+yr+'年 '+esc(r.stateProvince||r.county||'')
@@ -797,8 +800,8 @@ function koikiLoadGbif(){
       });
       const total = (d.count!=null) ? d.count : recs.length;
       koikiMsg.gbif = '発見記録：'+recs.length+'件を表示'
-        + (total>recs.length ? '（CC0/CC-BYの一部）' : '')
-        + '　出典：GBIF.org（CC0・CC-BYのみ）';
+        + (total>recs.length ? '（全'+total+'件の一部）' : '')
+        + '　出典：GBIF.org（CC0・CC-BY・CC-BY-NC／非営利・出典表示で利用）';
       koikiRenderNote();
     })
     .catch(function(){
@@ -808,9 +811,14 @@ function koikiLoadGbif(){
 }
 
 /* 周辺の発生自治体：市区町村データがあれば面で塗り、無ければ代表点 */
-function koikiAffectedName(key, geoName){
+// featureの全プロパティ値から市区町村名を照合（プロパティ名の違いに左右されない）
+function koikiAffectedName(key, feature){
   const list = KOIKI.affected[key] || [];
-  for(let i=0;i<list.length;i++){ if(geoName.indexOf(list[i])>=0) return list[i]; }
+  if(!list.length) return null;
+  const props = (feature && feature.properties) || {};
+  let hay = '';
+  for(const k in props){ const v = props[k]; if(typeof v === 'string') hay += v + '\u0001'; }
+  for(let i=0;i<list.length;i++){ if(hay.indexOf(list[i]) >= 0) return list[i]; }
   return null;
 }
 function koikiDrawMuni(){
@@ -824,13 +832,10 @@ function koikiDrawMuni(){
       .then(function(r){ if(!r.ok) throw 0; return r.json(); })
       .then(function(geo){
         L.geoJSON(geo, {
-          filter: function(f){
-            const nm = (f.properties[P[0]]||'') + (f.properties[P[1]]||'');
-            return !!koikiAffectedName(n.key, nm);
-          },
+          filter: function(f){ return !!koikiAffectedName(n.key, f); },
           style: function(){ return { color:'#fff', weight:1, fillColor:KOIKI.muniColor, fillOpacity:.35 }; },
           onEachFeature: function(f, layer){
-            const nm = (f.properties[P[0]]||'') + (f.properties[P[1]]||'');
+            const nm = koikiAffectedName(n.key, f) || '';
             layer.bindPopup('<b>'+esc(nm)+'</b><br>クビアカ発生確認（'+n.label+'）'
               +'<div style="font-size:11px;color:#6f635b;border-top:1px dashed #e3d9cf;margin-top:5px;padding-top:4px;">'
               +'出典：各自治体・県の公表</div>');
