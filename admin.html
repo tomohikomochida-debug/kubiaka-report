@@ -188,7 +188,7 @@
       <label><input type="checkbox" id="koikiGbif"> 発見記録(GBIF) <i class="dot koiki-gbif"></i></label>
       <label><input type="checkbox" id="koikiMuni"> 周辺の発生自治体 <i class="ring koiki-muni"></i></label>
       <div class="legend-note" id="koikiNote" style="display:none;"></div>
-      <div class="legend-note">広域は他団体の公開情報の「参考表示」で、対策室の判定ではありません。発見記録はGBIF（CC0・CC-BYのみ／出典：GBIF.org）、周辺の発生自治体は各自治体・県の公表に基づく事実です（市区町村データを置くと面、無い場合は代表点で表示）。</div>
+      <div class="legend-note">広域は他団体の公開情報の「参考表示」で、対策室の判定ではありません。発見記録はGBIF（CC0・CC-BYのみ／出典：GBIF.org）、周辺の発生自治体は各自治体・県の公表に基づく事実です（境界データは国土交通省 国土数値情報を自動取得して面で表示）。</div>
     </div>
   </div>
 </div>
@@ -687,7 +687,6 @@ function demoData(){
   ];
 }
 </script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
 <script>
 /* ════════════════════════════════════════════════════════════
    広域レイヤー（参考）：他団体の公開情報を「参考」として重ねる
@@ -704,20 +703,12 @@ const KOIKI = {
   // CC-BY-NCは「非営利＋出典表示」で利用可（対策室の非営利活動は該当）。商用利用はしないこと。
   gbifLicenses: ['CC0_1_0','CC_BY_4_0','CC_BY_NC_4_0'],
 
-  // ── 隣県の市区町村データ（面で塗るために使用）──────────────
-  //  スマートニュース japan-topography から各県をダウンロードし、
-  //  下記ファイル名にリネームして admin.html と同じフォルダに置いてください。
-  //  県コード： 東京13 / 埼玉11 / 群馬10 / 栃木09 / 茨城08 / 千葉12
-  //  ファイルが無い県は、下の fallbackPts の代表点で表示されます。
-  neighborProp: ['N03_003','N03_004'],   // 市名＋区名を結合して照合（政令市・特別区に対応）
-  neighbors: [
-    { key:'tokyo',   label:'東京', file:'tokyo.geojson'   },
-    { key:'saitama', label:'埼玉', file:'saitama.geojson' },
-    { key:'gunma',   label:'群馬', file:'gunma.geojson'   },
-    { key:'tochigi', label:'栃木', file:'tochigi.geojson' },
-    { key:'ibaraki', label:'茨城', file:'ibaraki.geojson' },
-    { key:'chiba',   label:'千葉', file:'chiba.geojson'   }
-  ],
+  // ── 市区町村の境界データ（面で塗るために使用）──────────────
+  //  全国版（市区町村単位）をCDNから自動取得するので、手動DL・リネームは不要。
+  //  境界データ出典：国土交通省 国土数値情報（SmartNews japan-topography 経由）。
+  muniGeoUrl: 'https://cdn.jsdelivr.net/gh/smartnews-smri/japan-topography@main/data/municipality/geojson/s0010/N03-21_210101.json',
+  //  都道府県名（N03_001）→ affectedのキー
+  prefKey: { '東京都':'tokyo', '埼玉県':'saitama', '群馬県':'gunma', '栃木県':'tochigi', '茨城県':'ibaraki', '千葉県':'chiba' },
 
   // ── 発生が確認された市区町村（各自治体・県の公表に基づく事実）──
   //  名前はGeoJSONの表記に合わせる。政令市は市名だけでOK（市全体を塗ります）。
@@ -836,60 +827,58 @@ function koikiAffectedName(key, feature){
 function koikiDrawMuni(){
   if(!map){ return; }
   koikiMuniLayer = L.layerGroup().addTo(map);
-  koikiMsg.muni = '周辺の発生自治体：読み込み中…'; koikiRenderNote();
-  const loaded = {};
-  const diag = [];
-  const tasks = KOIKI.neighbors.map(function(n){
-    return fetch(n.file)
-      .then(function(r){ if(!r.ok) throw 0; return r.json(); })
-      .then(function(geo){
-        // TopoJSON（type:"Topology"）が来たらGeoJSONへ変換
-        let fc = geo;
-        if(geo && geo.type === 'Topology' && window.topojson){
-          const feats = [];
-          for(const okey in geo.objects){
-            const conv = topojson.feature(geo, geo.objects[okey]);
-            if(conv && conv.type === 'FeatureCollection') feats.push.apply(feats, conv.features);
-            else if(conv) feats.push(conv);
-          }
-          fc = { type:'FeatureCollection', features:feats };
+  koikiMsg.muni = '周辺の発生自治体：境界データを取得中…（初回は数秒）'; koikiRenderNote();
+
+  fetch(KOIKI.muniGeoUrl)
+    .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    .then(function(geo){
+      let hit = 0;
+      const perPref = {}; // 県別の該当数（診断用）
+      L.geoJSON(geo, {
+        filter: function(f){
+          const pref = f.properties && f.properties.N03_001;
+          const key  = KOIKI.prefKey[pref];
+          if(!key) return false;                       // 対象6県以外は無視
+          const ok = !!koikiAffectedName(key, f);
+          if(ok){ hit++; perPref[key] = (perPref[key]||0)+1; }
+          return ok;
+        },
+        style: function(){ return { color:'#fff', weight:1, fillColor:KOIKI.muniColor, fillOpacity:.35 }; },
+        onEachFeature: function(f, layer){
+          const pref = (f.properties && f.properties.N03_001) || '';
+          const nm = koikiAffectedName(KOIKI.prefKey[pref], f) || '';
+          layer.bindPopup('<b>'+esc(nm)+'</b><br>クビアカ発生確認（'+esc(pref)+'）'
+            +'<div style="font-size:11px;color:#6f635b;border-top:1px dashed #e3d9cf;margin-top:5px;padding-top:4px;">'
+            +'出典：各自治体・県の公表 ／ 境界：国土交通省 国土数値情報</div>');
         }
-        let total = 0, hit = 0;
-        L.geoJSON(fc, {
-          filter: function(f){ total++; const ok = !!koikiAffectedName(n.key, f); if(ok) hit++; return ok; },
-          style: function(){ return { color:'#fff', weight:1, fillColor:KOIKI.muniColor, fillOpacity:.35 }; },
-          onEachFeature: function(f, layer){
-            const nm = koikiAffectedName(n.key, f) || '';
-            layer.bindPopup('<b>'+esc(nm)+'</b><br>クビアカ発生確認（'+n.label+'）'
-              +'<div style="font-size:11px;color:#6f635b;border-top:1px dashed #e3d9cf;margin-top:5px;padding-top:4px;">'
-              +'出典：各自治体・県の公表</div>');
-          }
-        }).addTo(koikiMuniLayer);
-        loaded[n.key] = true;
-        diag.push(n.label + ' ' + total + '/' + hit);
-      })
-      .catch(function(){ loaded[n.key] = false; diag.push(n.label + ' 未配置'); });
-  });
-  Promise.all(tasks).then(function(){
-    let ptCount = 0;
-    KOIKI.fallbackPts.forEach(function(p){
-      if(loaded[p.pref]) return;               // 面が出ている県は点を重ねない
-      L.circleMarker(p.ll, { radius:11, color:KOIKI.muniColor, weight:2, dashArray:'4 3',
-        fillColor:KOIKI.muniColor, fillOpacity:.18 })
-        .bindPopup('<b>'+esc(p.name)+'</b><br>クビアカ '+esc(p.yr)
-          +'<div style="font-size:11px;color:#6f635b;border-top:1px dashed #e3d9cf;margin-top:5px;padding-top:4px;">'
-          +'出典：各自治体・県の公表。位置は市域のおおよその中心です。</div>')
-        .addTo(koikiMuniLayer);
-      ptCount++;
+      }).addTo(koikiMuniLayer);
+
+      if(hit > 0){
+        koikiMsg.muni = '周辺の発生自治体：面で表示（'+hit+'市区町村）'
+          + '　出典：各自治体・県の公表 ／ 境界：国土交通省 国土数値情報';
+      } else {
+        // 境界は取れたが該当0：名称表記の差異など。代表点で補う。
+        koikiDrawFallbackPts();
+        koikiMsg.muni = '周辺の発生自治体：代表点で表示（境界は取得できたが該当0）';
+      }
+      koikiRenderNote();
+    })
+    .catch(function(){
+      koikiDrawFallbackPts();
+      koikiMsg.muni = '周辺の発生自治体：代表点で表示（境界データの取得に失敗）';
+      koikiRenderNote();
     });
-    const anyPoly = KOIKI.neighbors.some(function(n){ return loaded[n.key]; });
-    let base;
-    if(anyPoly && ptCount===0)  base = '周辺の発生自治体：面で表示（出典：各自治体・県の公表）';
-    else if(anyPoly)            base = '周辺の発生自治体：一部は面、データ未配置の県は代表点で表示';
-    else                        base = '周辺の発生自治体：代表点で表示（隣県の市区町村データを同フォルダに置くと面になります）';
-    if(diag.length) base += '<br><span style="font-size:11px;color:#6f635b;">読込内訳 ' + diag.join('・') + '（県：市区町村数/該当数）</span>';
-    koikiMsg.muni = base;
-    koikiRenderNote();
+}
+
+/* 境界が使えないときの代表点フォールバック */
+function koikiDrawFallbackPts(){
+  KOIKI.fallbackPts.forEach(function(p){
+    L.circleMarker(p.ll, { radius:11, color:KOIKI.muniColor, weight:2, dashArray:'4 3',
+      fillColor:KOIKI.muniColor, fillOpacity:.18 })
+      .bindPopup('<b>'+esc(p.name)+'</b><br>クビアカ '+esc(p.yr)
+        +'<div style="font-size:11px;color:#6f635b;border-top:1px dashed #e3d9cf;margin-top:5px;padding-top:4px;">'
+        +'出典：各自治体・県の公表。位置は市域のおおよその中心です。</div>')
+      .addTo(koikiMuniLayer);
   });
 }
 
