@@ -687,6 +687,7 @@ function demoData(){
   ];
 }
 </script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
 <script>
 /* ════════════════════════════════════════════════════════════
    広域レイヤー（参考）：他団体の公開情報を「参考」として重ねる
@@ -767,7 +768,17 @@ function koikiRenderNote(){
   n.style.display='block'; n.innerHTML = parts.join('<br>');
 }
 
-/* 発見記録（GBIF・CC0/CC-BYのみ） */
+/* GBIFのlicense値（URI形式/enum形式の両方）を見やすいラベルに正規化 */
+function gbifLicLabel(lic){
+  if(!lic) return '';
+  const s = String(lic).toLowerCase();
+  if(s.indexOf('zero')>=0 || s.indexOf('cc0')>=0) return 'CC0';
+  if(s.indexOf('by-nc')>=0 || s.indexOf('by_nc')>=0) return 'CC-BY-NC';
+  if(s.indexOf('/by/')>=0 || s.indexOf('by_4')>=0 || s.indexOf('by/4')>=0) return 'CC-BY';
+  return String(lic);
+}
+
+/* 発見記録（GBIF） */
 function koikiLoadGbif(){
   if(!map){ return; }
   koikiGbifLayer = L.layerGroup().addTo(map);
@@ -783,14 +794,15 @@ function koikiLoadGbif(){
   fetch(url, { headers:{ 'Accept':'application/json' } })
     .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
     .then(function(d){
+      // サーバ側で &license= 済み。GBIFの記録側 license はURI形式（例: .../by-nc/4.0/）なので
+      // ここでは厳密一致で弾かず、座標のある記録を採用する。
       const recs = (d.results||[]).filter(function(r){
-        return r.decimalLatitude && r.decimalLongitude
-          && KOIKI.gbifLicenses.indexOf(r.license) >= 0; // 念のためクライアント側でも限定
+        return r.decimalLatitude && r.decimalLongitude;
       });
       recs.forEach(function(r){
         const yr = r.year || (r.eventDate ? String(r.eventDate).slice(0,4) : '年不明');
         const by = esc(r.recordedBy || r.datasetName || '提供者不明');
-        const lic = ({'CC0_1_0':'CC0','CC_BY_4_0':'CC-BY','CC_BY_NC_4_0':'CC-BY-NC'})[r.license] || r.license;
+        const lic = gbifLicLabel(r.license);
         L.circleMarker([r.decimalLatitude, r.decimalLongitude],
           { radius:6, color:'#fff', weight:2, fillColor:KOIKI.gbifColor, fillOpacity:.85 })
           .bindPopup('<b>クビアカ発見記録（参考）</b><br>'+yr+'年 '+esc(r.stateProvince||r.county||'')
@@ -826,13 +838,25 @@ function koikiDrawMuni(){
   koikiMuniLayer = L.layerGroup().addTo(map);
   koikiMsg.muni = '周辺の発生自治体：読み込み中…'; koikiRenderNote();
   const loaded = {};
-  const P = KOIKI.neighborProp;
+  const diag = [];
   const tasks = KOIKI.neighbors.map(function(n){
     return fetch(n.file)
       .then(function(r){ if(!r.ok) throw 0; return r.json(); })
       .then(function(geo){
-        L.geoJSON(geo, {
-          filter: function(f){ return !!koikiAffectedName(n.key, f); },
+        // TopoJSON（type:"Topology"）が来たらGeoJSONへ変換
+        let fc = geo;
+        if(geo && geo.type === 'Topology' && window.topojson){
+          const feats = [];
+          for(const okey in geo.objects){
+            const conv = topojson.feature(geo, geo.objects[okey]);
+            if(conv && conv.type === 'FeatureCollection') feats.push.apply(feats, conv.features);
+            else if(conv) feats.push(conv);
+          }
+          fc = { type:'FeatureCollection', features:feats };
+        }
+        let total = 0, hit = 0;
+        L.geoJSON(fc, {
+          filter: function(f){ total++; const ok = !!koikiAffectedName(n.key, f); if(ok) hit++; return ok; },
           style: function(){ return { color:'#fff', weight:1, fillColor:KOIKI.muniColor, fillOpacity:.35 }; },
           onEachFeature: function(f, layer){
             const nm = koikiAffectedName(n.key, f) || '';
@@ -842,8 +866,9 @@ function koikiDrawMuni(){
           }
         }).addTo(koikiMuniLayer);
         loaded[n.key] = true;
+        diag.push(n.label + ' ' + total + '/' + hit);
       })
-      .catch(function(){ loaded[n.key] = false; });
+      .catch(function(){ loaded[n.key] = false; diag.push(n.label + ' 未配置'); });
   });
   Promise.all(tasks).then(function(){
     let ptCount = 0;
@@ -858,9 +883,12 @@ function koikiDrawMuni(){
       ptCount++;
     });
     const anyPoly = KOIKI.neighbors.some(function(n){ return loaded[n.key]; });
-    if(anyPoly && ptCount===0)  koikiMsg.muni = '周辺の発生自治体：面で表示（出典：各自治体・県の公表）';
-    else if(anyPoly)            koikiMsg.muni = '周辺の発生自治体：一部は面、データ未配置の県は代表点で表示';
-    else                        koikiMsg.muni = '周辺の発生自治体：代表点で表示（隣県の市区町村データを同フォルダに置くと面になります）';
+    let base;
+    if(anyPoly && ptCount===0)  base = '周辺の発生自治体：面で表示（出典：各自治体・県の公表）';
+    else if(anyPoly)            base = '周辺の発生自治体：一部は面、データ未配置の県は代表点で表示';
+    else                        base = '周辺の発生自治体：代表点で表示（隣県の市区町村データを同フォルダに置くと面になります）';
+    if(diag.length) base += '<br><span style="font-size:11px;color:#6f635b;">読込内訳 ' + diag.join('・') + '（県：市区町村数/該当数）</span>';
+    koikiMsg.muni = base;
     koikiRenderNote();
   });
 }
