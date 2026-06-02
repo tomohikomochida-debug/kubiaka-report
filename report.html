@@ -141,6 +141,8 @@
   .alt-box.show{display:block;}
   .mini-map{height:0;border-radius:14px;margin-top:12px;overflow:hidden;transition:height .3s;}
   .mini-map.show{height:220px;}
+  .or-line{display:flex;align-items:center;text-align:center;color:var(--ink-soft);font-size:12.5px;margin:14px 0;gap:10px;}
+  .or-line::before,.or-line::after{content:"";flex:1;height:1px;background:var(--line);}
 </style>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -194,19 +196,43 @@
 
   <div class="card">
     <div class="step-head"><span class="step-no">3</span><span class="step-title">場所を教える</span><span class="req">必須</span></div>
-    <p class="step-desc">木のそばで下のボタンを押すと、今いる場所が自動で記録されます。</p>
-    <button class="geo-btn" id="geoBtn">📍 現在地を取得する</button>
+    <p class="step-desc">次のいずれかの方法で場所を指定してください。あとから地図のピンを動かして微調整できます。</p>
+
+    <button class="geo-btn" id="geoBtn">📍 いまいる場所を使う（GPS）</button>
     <div class="geo-status" id="geoStatus"></div>
 
-    <button type="button" class="alt-link" id="altToggle">うまくいかない場合は、場所を入力する ▾</button>
+    <div class="or-line"><span>または</span></div>
 
-    <div class="alt-box" id="altBox">
-      <label class="fl" style="margin-top:0;">公園の名前や住所</label>
-      <input type="text" id="placeText" placeholder="例：川崎市宮前区 ○○公園 ／ ○○市○○町1-2">
-      <button type="button" class="geo-btn" id="lookupBtn" style="margin-top:10px;background:var(--bark);">🔎 この場所を地図で探す</button>
-      <div class="geo-status" id="lookupStatus"></div>
-      <div id="miniMap" class="mini-map"></div>
-      <p class="field-note" id="mapHint" style="display:none;">ピンを長押し→ドラッグで微調整できます。だいたいの位置で大丈夫です。</p>
+    <label class="fl" style="margin-top:0;">住所・公園名で探す</label>
+    <input type="text" id="placeText" placeholder="例：川崎市宮前区 ○○公園 ／ ○○市○○町1-2">
+    <button type="button" class="geo-btn" id="lookupBtn" style="margin-top:10px;background:var(--bark);">🔎 この場所を地図で探す</button>
+
+    <div class="or-line"><span>または</span></div>
+
+    <button type="button" class="geo-btn" id="mapPickBtn" style="background:var(--leaf-deep);">🗺 地図から直接えらぶ</button>
+
+    <div class="geo-status" id="lookupStatus"></div>
+    <div id="miniMap" class="mini-map"></div>
+    <p class="field-note" id="mapHint" style="display:none;">地図をタップ、またはピンをドラッグして場所を合わせてください。だいたいの位置で大丈夫です。</p>
+
+    <div style="margin-top:18px;padding-top:16px;border-top:1px dashed var(--line);">
+      <span class="q-label">この場所はどんな場所ですか？</span>
+      <div class="opts" style="margin-bottom:6px;">
+        <label><input type="radio" name="placeKind" value="公園"><span>公園</span></label>
+        <label><input type="radio" name="placeKind" value="街路樹・道路沿い"><span>街路樹・道路沿い</span></label>
+        <label><input type="radio" name="placeKind" value="公共施設"><span>公共施設</span></label>
+        <label><input type="radio" name="placeKind" value="個人宅"><span>個人宅</span></label>
+        <label><input type="radio" name="placeKind" value="学校・幼稚園"><span>学校・幼稚園</span></label>
+        <label><input type="radio" name="placeKind" value="企業・事業所"><span>企業・事業所</span></label>
+        <label><input type="radio" name="placeKind" value="その他"><span>その他</span></label>
+      </div>
+
+      <span class="q-label" style="margin-top:14px;">一般公開マップでの場所の見せ方</span>
+      <div class="opts">
+        <label><input type="radio" name="publish" value="公開" checked><span>だいたいの場所まで公開してよい</span></label>
+        <label><input type="radio" name="publish" value="ぼかす"><span>正確な場所は伏せ、大まかに公開</span></label>
+      </div>
+      <p class="field-note" id="blurNote">個人宅・学校・企業などを選ぶと、一般公開マップでは自動的に大まかな表示になります（対策室には正確な場所が伝わります）。</p>
     </div>
   </div>
 
@@ -359,6 +385,9 @@ function showMiniMap(lat,lng){
     marker.on('dragend',function(){
       const p=marker.getLatLng();geo.lat=p.lat;geo.lng=p.lng;
     });
+    miniMap.on('click',function(e){
+      marker.setLatLng(e.latlng);geo.lat=e.latlng.lat;geo.lng=e.latlng.lng;
+    });
   }else{
     miniMap.setView([lat,lng],16);marker.setLatLng([lat,lng]);
   }
@@ -368,8 +397,8 @@ function showMiniMap(lat,lng){
 document.getElementById('geoBtn').addEventListener('click',function(){
   if(!navigator.geolocation){
     geoStatus.className='geo-status ng';
-    geoStatus.innerHTML='この端末では位置情報が使えません。下の「場所を入力する」をお使いください。';
-    document.getElementById('altBox').classList.add('show');return;
+    geoStatus.innerHTML='この端末では位置情報が使えません。下の「住所・公園名で探す」か「地図から直接えらぶ」をお使いください。';
+    return;
   }
   geoStatus.className='geo-status loading';geoStatus.textContent='現在地を確認しています…';
   navigator.geolocation.getCurrentPosition(
@@ -381,16 +410,46 @@ document.getElementById('geoBtn').addEventListener('click',function(){
     },
     function(err){
       geoStatus.className='geo-status ng';
-      geoStatus.innerHTML='位置を取得できませんでした。<br>かわりに、下の欄に場所を入力してください。';
-      document.getElementById('altBox').classList.add('show');
+      geoStatus.innerHTML='位置を取得できませんでした。<br>かわりに「住所・公園名で探す」か「地図から直接えらぶ」をお使いください。';
     },
     {enableHighAccuracy:true,timeout:12000,maximumAge:0}
   );
 });
 
-/* 場所入力の開閉 */
-document.getElementById('altToggle').addEventListener('click',function(){
-  document.getElementById('altBox').classList.toggle('show');
+/* 地図から直接えらぶ（住所入力なしでもOK） */
+document.getElementById('mapPickBtn').addEventListener('click',function(){
+  let lat=geo.lat, lng=geo.lng;
+  if(lat===null||lng===null){ lat=35.45; lng=139.50; }   // 神奈川県あたり
+  if(geo.lat===null){ geo.lat=lat; geo.lng=lng; }
+  if(!geo.method){ geo.method='地図選択'; }
+  lookupStatus.className='geo-status ok';
+  lookupStatus.innerHTML='地図をタップ、またはピンをドラッグして場所を合わせてください。';
+  showMiniMap(lat,lng);
+});
+
+/* 種別・公開範囲：自動ぼかしの表示制御 */
+const AUTO_BLUR_KINDS=['個人宅','学校・幼稚園','企業・事業所'];
+function updateBlurUI(){
+  const k=radioVal('placeKind');
+  const note=document.getElementById('blurNote');
+  const pubs=document.querySelectorAll('input[name="publish"]');
+  if(AUTO_BLUR_KINDS.indexOf(k)>=0){
+    const bk=document.querySelector('input[name="publish"][value="ぼかす"]');
+    if(bk) bk.checked=true;
+    pubs.forEach(function(r){ r.disabled=true; });
+    note.textContent='この種別は、一般公開マップでは自動的に大まかな表示になります（対策室には正確な場所が伝わります）。';
+    note.style.color='var(--leaf-deep)';
+  }else{
+    pubs.forEach(function(r){ r.disabled=false; });
+    const pub=radioVal('publish');
+    note.textContent = (pub==='ぼかす')
+      ? '一般公開マップでは大まかな円で表示されます（対策室には正確な場所が伝わります）。'
+      : '個人宅・学校・企業などを選ぶと、一般公開マップでは自動的に大まかな表示になります（対策室には正確な場所が伝わります）。';
+    note.style.color='var(--ink-soft)';
+  }
+}
+document.querySelectorAll('input[name="placeKind"],input[name="publish"]').forEach(function(r){
+  r.addEventListener('change',updateBlurUI);
 });
 
 /* 国土地理院ジオコーディング（無料・キー不要） */
@@ -429,17 +488,24 @@ document.getElementById('submitBtn').addEventListener('click',async function(){
   // 場所：GPS/地名変換の座標、または場所の文字、のいずれかがあればOK
   const placeNow=document.getElementById('placeText').value.trim();
   if(geo.lat===null && !placeNow){
-    alert('ステップ3「場所」を教えてください。\n「現在地を取得する」か、場所の入力（公園名・住所）のどちらかをお願いします。');
-    document.getElementById('altBox').classList.add('show');return;
+    alert('ステップ3「場所」を教えてください。\nGPS／住所の入力／地図から直接えらぶ、のいずれかをお願いします。');
+    document.getElementById('placeText').focus();return;
   }
   if(geo.lat===null && placeNow && !geo.method){geo.method='手入力のみ';geo.placeText=placeNow;}
   if(placeNow){geo.placeText=placeNow;}
+
+  // 場所の種別と公開範囲（自動ぼかしを確定）
+  const placeKind=radioVal('placeKind');
+  const autoBlur=['個人宅','学校・幼稚園','企業・事業所'].indexOf(placeKind)>=0;
+  const publishChoice=radioVal('publish')||'公開';
+  const publicScope=(autoBlur || publishChoice==='ぼかす') ? 'ぼかす' : '公開';
 
   const payload={
     type:'report',
     photos:[photos.photo1,photos.photo2].concat(extras),
     lat:geo.lat,lng:geo.lng,acc:geo.acc,
     locMethod:geo.method||'',placeText:geo.placeText||'',
+    placeKind:placeKind,publicScope:publicScope,
     frass:radioVal('frass'),yani:radioVal('yani'),hole:radioVal('hole'),
     adult:radioVal('adult'),tree:radioVal('tree'),
     note:document.getElementById('note').value.trim(),
