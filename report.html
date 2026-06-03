@@ -355,16 +355,29 @@ document.querySelectorAll('.redo').forEach(function(b){
   });
 });
 
-const extras=[];
+const extras=[];  // {data, el} の配列
+function addExtra(data){
+  const wrap=document.createElement('div');
+  wrap.style.cssText='position:relative;margin-bottom:8px;border-radius:10px;overflow:hidden;';
+  const im=document.createElement('img');
+  im.src=data;im.style.cssText='width:100%;display:block;';
+  const del=document.createElement('button');
+  del.type='button';del.textContent='✕ 削除';
+  del.style.cssText='position:absolute;top:8px;right:8px;background:rgba(38,32,28,.72);color:#fff;'
+    +'border:none;border-radius:9px;padding:7px 13px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;';
+  const entry={data:data, el:wrap};
+  del.addEventListener('click',function(){
+    const i=extras.indexOf(entry);
+    if(i>=0) extras.splice(i,1);
+    wrap.remove();
+  });
+  wrap.appendChild(im);wrap.appendChild(del);
+  document.getElementById('extraList').appendChild(wrap);
+  extras.push(entry);
+}
 document.getElementById('photoExtra').addEventListener('change',async function(e){
   for(const f of e.target.files){
-    try{
-      const data=await compress(f);extras.push(data);
-      const wrap=document.createElement('div');
-      wrap.style.cssText='margin-bottom:8px;border-radius:10px;overflow:hidden;';
-      const im=document.createElement('img');im.src=data;im.style.cssText='width:100%;display:block;';
-      wrap.appendChild(im);document.getElementById('extraList').appendChild(wrap);
-    }catch(err){}
+    try{ const data=await compress(f); addExtra(data); }catch(err){}
   }
   e.target.value='';
 });
@@ -502,7 +515,7 @@ document.getElementById('submitBtn').addEventListener('click',async function(){
 
   const payload={
     type:'report',
-    photos:[photos.photo1,photos.photo2].concat(extras),
+    photos:[photos.photo1,photos.photo2].concat(extras.map(function(x){return x.data;})),
     lat:geo.lat,lng:geo.lng,acc:geo.acc,
     locMethod:geo.method||'',placeText:geo.placeText||'',
     placeKind:placeKind,publicScope:publicScope,
