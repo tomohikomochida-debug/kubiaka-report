@@ -54,6 +54,8 @@
   .dot{width:13px;height:13px;border-radius:50%;display:inline-block;}
   .ring{width:14px;height:14px;border-radius:50%;border:2px dashed var(--c-mikakunin);
     background:rgba(217,72,59,.15);box-sizing:border-box;display:inline-block;}
+  .blurdot{width:14px;height:14px;border-radius:50%;border:2px dashed #8a6d3b;
+    background:rgba(138,109,59,.12);box-sizing:border-box;display:inline-block;}
 
   .list-view{display:none;padding:14px;}
   .list-view.on{display:block;}
@@ -102,9 +104,10 @@
     <span><i class="dot" style="background:var(--c-shiro)"></i>該当なし</span>
     <span><i class="dot" style="background:var(--c-kanryo)"></i>対応済</span>
     <span><i class="ring"></i>要注意区域（半径3km）</span>
+    <span><i class="blurdot"></i>おおまかな表示（場所を伏せた報告）</span>
     <div class="legend-note">丸印は市民からの報告地点で、色は対応の進み具合を表します。<br>
       未確認＝まだ現地を見ていない／確認予定＝確認に行く予定／要対応＝被害を確認、対応が必要／該当なし＝確認したがクビアカではなかった／対応済＝駆除などの対応が完了。<br>
-      赤い破線の円は、被害が確認された地点から半径3kmの要注意エリアです。</div>
+      赤い破線の円は、被害が確認された地点から半径3kmの要注意エリアです。茶色の円は、場所を伏せた報告のおおまかな位置です。</div>
   </div>
 </div>
 
@@ -160,6 +163,17 @@ function initMap(){
     msg.innerHTML='地図を表示できませんでした。<br>「一覧」タブはご利用いただけます。';
   }
 }
+/* ぼかし表示：報告IDから毎回同じズレを計算（特定されにくく、表示は安定） */
+function hashStr(s){ let h=0; s=String(s||''); for(let i=0;i<s.length;i++){ h=(h*31 + s.charCodeAt(i))|0; } return h; }
+function blurOffset(rep){
+  const h=hashStr(rep.id);
+  const ang=(Math.abs(h)%360)*Math.PI/180;
+  const dist=300 + (Math.abs(Math.floor(h/360))%300); // 300〜600m
+  const dLat=(dist*Math.cos(ang))/111000;
+  const dLng=(dist*Math.sin(ang))/(111000*Math.cos(rep.lat*Math.PI/180));
+  return [rep.lat+dLat, rep.lng+dLng];
+}
+
 function drawMarkers(){
   if(!map) return;
   markers.forEach(function(m){ map.removeLayer(m); });
@@ -167,31 +181,44 @@ function drawMarkers(){
   let bounds = null;
   function extend(b){ if(!bounds){ bounds = L.latLngBounds(b); } else { bounds.extend(b); } }
 
-  // 要注意区域：発生確認地点（CONFIRMED_STATUS）から半径3km
   REPORTS.forEach(function(rep){
     if(!rep.lat || !rep.lng) return;
-    if(CONFIRMED_STATUS.indexOf(rep.status) < 0) return;
-    const zone = L.circle([rep.lat, rep.lng], {
-      radius: CAUTION_RADIUS_M, color:'#d9483b', weight:2.5, dashArray:'6 5',
-      fillColor:'#d9483b', fillOpacity:.15, interactive:false
-    }).addTo(map);
-    markers.push(zone);
-    extend(zone.getBounds());
-  });
+    const blur = (rep.publicScope === 'ぼかす');
+    const pos = blur ? blurOffset(rep) : [rep.lat, rep.lng];
+    const confirmed = CONFIRMED_STATUS.indexOf(rep.status) >= 0;
 
-  // 報告ピン（要注意区域の上に描画）
-  REPORTS.forEach(function(rep){
-    if(!rep.lat || !rep.lng) return;
-    const color = STATUS_COLOR[rep.status] || '#999';
-    const mk = L.circleMarker([rep.lat, rep.lng], {
-      radius:9, fillColor:color, color:'#fff', weight:2, fillOpacity:.9
-    }).addTo(map);
-    const acc = rep.locMethod==='地名変換' ? '（おおよその位置）'
-              : rep.locMethod==='手入力のみ' ? '（位置はおおよそ）' : '';
-    mk.bindPopup('<b>'+(STATUS_LABEL[rep.status]||rep.status)+'</b> '+(rep.tree||'')+'<br>'
-      +(rep.placeText? rep.placeText+'<br>':'')+acc);
-    markers.push(mk);
-    extend([rep.lat, rep.lng]);
+    // 要注意区域（半径3km）。ぼかし報告はズレた中心に表示
+    if(confirmed){
+      const zone = L.circle(pos, {
+        radius: CAUTION_RADIUS_M, color:'#d9483b', weight:2.5, dashArray:'6 5',
+        fillColor:'#d9483b', fillOpacity:.15, interactive:false
+      }).addTo(map);
+      markers.push(zone);
+      extend(zone.getBounds());
+    }
+
+    if(blur){
+      // 正確な点は出さず、大まかな円で表示
+      const area = L.circle(pos, {
+        radius:500, color:'#8a6d3b', weight:2, dashArray:'4 4',
+        fillColor:'#8a6d3b', fillOpacity:.12
+      }).addTo(map);
+      area.bindPopup('<b>'+(STATUS_LABEL[rep.status]||rep.status)+'</b> '+(rep.tree||'')
+        +'<br>このあたり（正確な場所は非公開）');
+      markers.push(area);
+      extend(pos);
+    }else{
+      const color = STATUS_COLOR[rep.status] || '#999';
+      const mk = L.circleMarker(pos, {
+        radius:9, fillColor:color, color:'#fff', weight:2, fillOpacity:.9
+      }).addTo(map);
+      const acc = rep.locMethod==='地名変換' ? '（おおよその位置）'
+                : rep.locMethod==='手入力のみ' ? '（位置はおおよそ）' : '';
+      mk.bindPopup('<b>'+(STATUS_LABEL[rep.status]||rep.status)+'</b> '+(rep.tree||'')+'<br>'
+        +(rep.placeText? rep.placeText+'<br>':'')+acc);
+      markers.push(mk);
+      extend(pos);
+    }
   });
 
   if(bounds && bounds.isValid()){ map.fitBounds(bounds, {padding:[40,40], maxZoom:15}); }
@@ -266,11 +293,11 @@ function driveThumb(url){
 function demoData(){
   return [
     {id:'R-d1',datetime:'2026-05-30 10:12',lat:35.575,lng:139.575,photos:[],
-     frass:'はい',tree:'サクラ',status:'要対応',locMethod:'GPS',placeText:'宮前区○○公園'},
+     frass:'はい',tree:'サクラ',status:'要対応',locMethod:'GPS',placeText:'宮前区○○公園',publicScope:'公開'},
     {id:'R-d2',datetime:'2026-05-29 16:40',lat:35.44,lng:139.62,photos:[],
-     frass:'わからない',tree:'わからない',status:'確認予定',locMethod:'地名変換',placeText:'横浜市○○区××'},
+     frass:'わからない',tree:'わからない',status:'確認予定',locMethod:'地名変換',placeText:'横浜市○○区××',publicScope:'公開'},
     {id:'R-d3',datetime:'2026-05-25 09:05',lat:35.36,lng:139.48,photos:[],
-     frass:'いいえ',tree:'ウメ',status:'完了',locMethod:'GPS',placeText:'藤沢市△△'}
+     frass:'いいえ',tree:'ウメ',status:'完了',locMethod:'GPS',placeText:'藤沢市△△',publicScope:'ぼかす'}
   ];
 }
 
